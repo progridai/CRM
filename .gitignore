@@ -1,0 +1,31 @@
+﻿# ===========================
+#  .gitignore — CRM Progrid+
+# ===========================
+
+# ---- Segredos locais (NUNCA commitar) ----
+backend/.env.local
+frontend/.env.local
+*.env.local
+
+# ---- .NET / C# ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.log
+appsettings.Development.json
+
+# ---- Node / Frontend ----
+node_modules/
+dist/
+.vite/
+frontend/.env
+
+# ---- Sistema Operacional ----
+.DS_Store
+Thumbs.db
+
+# ---- IDEs ----
+.idea/
+.vscode/settings.json

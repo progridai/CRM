@@ -1,0 +1,314 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ==========================================================================
+   Cores de Fundo das Colunas do Kanban (Variáveis Centralizadas)
+   --------------------------------------------------------------------------
+   Defina aqui as cores de fundo de cada fila do Kanban.
+   Escala progressiva invertida: inicia com tom mais escuro e definido em
+   Nova posição e vai clareando suavemente ao longo do funil ativo.
+   ========================================================================== */
+:root {
+  /* Escala progressiva índigo invertida (mais escuro -> mais claro) */
+  --kanban-nova-posicao-bg: #d9e2fb;            /* Etapa 1: tom mais definido/escuro na entrada */
+  --kanban-contato-andamento-bg: #e2e8fc;       /* Etapa 2: clareando progressivamente */
+  --kanban-negociacao-bg: #ebf0fd;              /* Etapa 3: tom intermediário suave */
+  --kanban-aguardando-pagamento-bg: #f2f5fe;    /* Etapa 4: tom mais claro e arejado pré-desfecho */
+
+  /* Etapas finais de encerramento (Lost / Won) */
+  --kanban-encerrado-sem-pagamento-bg: #fdf4f4; /* Encerrado sem pagamento: rosé suave */
+  --kanban-quitado-bg: #edf9f2;                 /* Quitado: verde menta suave */
+}
+
+/* Modo escuro: colunas ativas restauradas ao padrão anterior e desfechos suavizados */
+html.dark,
+.dark {
+  --kanban-nova-posicao-bg: #1b2b54;            /* Etapa 1: tom anterior mantido */
+  --kanban-contato-andamento-bg: #162446;       /* Etapa 2: tom anterior mantido */
+  --kanban-negociacao-bg: #121e38;              /* Etapa 3: tom anterior mantido */
+  --kanban-aguardando-pagamento-bg: #0e172a;    /* Etapa 4: tom anterior mantido */
+
+  /* Apenas estas duas colunas foram aprimoradas para evitar o aspecto escuro pesado/manchado */
+  --kanban-encerrado-sem-pagamento-bg: rgba(244, 63, 94, 0.07); /* Encerrado: leve toque rosé/vinho sutil */
+  --kanban-quitado-bg: rgba(16, 185, 129, 0.07);               /* Quitado: leve toque menta/esmeralda sutil */
+}
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #f7f9fb;
+  color: #191c1e;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html.dark body,
+.dark body {
+  background-color: #0b0f19;
+  color: #e2e8f0;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom subtle scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: #64748b;
+}
+
+/* Dark mode scrollbar */
+html.dark .custom-scrollbar,
+.dark .custom-scrollbar {
+  scrollbar-color: #334155 transparent;
+}
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb,
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ==========================================================================
+   Modern Executive Dark Palette Overrides
+   Avoids harsh pitch black (#000000).
+   Uses refined slate-navy charcoal (#0b0f19 / #151d2e / #1c263c).
+   ========================================================================== */
+
+/* Containers and surfaces */
+html.dark .bg-white {
+  background-color: #151d2e;
+}
+html.dark .bg-slate-50,
+html.dark [class~="bg-slate-50"],
+html.dark [class*=" bg-slate-50/"],
+html.dark [class^="bg-slate-50/"],
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-50\/60,
+html.dark .bg-slate-50\/70,
+html.dark .bg-slate-50\/80 {
+  background-color: #101624;
+}
+html.dark .bg-slate-100,
+html.dark [class~="bg-slate-100"],
+html.dark [class*=" bg-slate-100/"],
+html.dark [class^="bg-slate-100/"],
+html.dark .bg-slate-100\/50,
+html.dark .bg-slate-100\/70,
+html.dark .bg-slate-100\/80,
+html.dark .bg-slate-100\/90 {
+  background-color: #131b2c;
+}
+html.dark .bg-slate-200,
+html.dark [class~="bg-slate-200"],
+html.dark [class*=" bg-slate-200/"],
+html.dark [class^="bg-slate-200/"],
+html.dark .bg-slate-200\/50,
+html.dark .bg-slate-200\/60,
+html.dark .bg-slate-200\/70,
+html.dark .bg-slate-200\/80,
+html.dark .bg-slate-200\/90 {
+  background-color: #1e293b;
+}
+
+/* Header & Sidebar in dark */
+html.dark header {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  border-color: #1e293b !important;
+}
+html.dark aside#main-sidebar {
+  background-color: #0a0e18 !important;
+  border-color: #1a2333 !important;
+  color: #e2e8f0 !important;
+}
+
+/* Borders */
+html.dark .border-slate-100,
+html.dark [class~="border-slate-100"],
+html.dark [class*=" border-slate-100/"],
+html.dark [class^="border-slate-100/"],
+html.dark .border-slate-200,
+html.dark [class~="border-slate-200"],
+html.dark [class*=" border-slate-200/"],
+html.dark [class^="border-slate-200/"],
+html.dark .border-slate-200\/50,
+html.dark .border-slate-200\/60,
+html.dark .border-slate-200\/70,
+html.dark .border-slate-200\/80 {
+  border-color: #1e293b;
+}
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b;
+}
+
+/* Text colors */
+html.dark .text-slate-900 {
+  color: #f8fafc;
+}
+html.dark .text-slate-800 {
+  color: #e2e8f0;
+}
+html.dark .text-slate-700 {
+  color: #cbd5e1;
+}
+html.dark .text-slate-600 {
+  color: #94a3b8;
+}
+html.dark .text-slate-500 {
+  color: #718096;
+}
+
+/* Hovers */
+html.dark [class*="hover:bg-slate-50"]:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-50\/60:hover,
+html.dark .hover\:bg-slate-50\/80:hover {
+  background-color: #1c263c;
+}
+html.dark [class*="hover:bg-slate-100"]:hover,
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-slate-200\/70:hover {
+  background-color: #1e293b;
+}
+html.dark .hover\:text-slate-900:hover,
+html.dark .hover\:text-slate-700:hover {
+  color: #f8fafc;
+}
+
+/* Kanban column sections */
+html.dark section.w-\[330px\] {
+  background-color: rgba(16, 22, 36, 0.7);
+  border-color: #1e293b;
+}
+
+/* Inputs, textareas and selects */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+html.dark select option {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
+}
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #6366f1;
+}
+
+/* Subtle shadows in dark */
+html.dark .shadow-2xs,
+html.dark .shadow-xs,
+html.dark .shadow-sm,
+html.dark .shadow-md,
+html.dark .shadow-lg,
+html.dark .shadow-xl,
+html.dark .shadow-2xl {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
+}
+
+/* Soft badges and accents in dark mode */
+html.dark .bg-emerald-50,
+html.dark [class~="bg-emerald-50"],
+html.dark [class*=" bg-emerald-50/"],
+html.dark [class^="bg-emerald-50/"],
+html.dark [class~="bg-emerald-100"],
+html.dark [class*=" bg-emerald-100/"] {
+  background-color: rgba(6, 78, 59, 0.35);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+html.dark [class*="hover:bg-emerald-50"]:hover {
+  background-color: rgba(6, 78, 59, 0.4);
+}
+html.dark .bg-amber-50,
+html.dark [class~="bg-amber-50"],
+html.dark [class*=" bg-amber-50/"],
+html.dark [class^="bg-amber-50/"] {
+  background-color: rgba(120, 53, 15, 0.35);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+html.dark .bg-rose-50,
+html.dark [class~="bg-rose-50"],
+html.dark [class*=" bg-rose-50/"],
+html.dark [class^="bg-rose-50/"] {
+  background-color: rgba(136, 19, 55, 0.35);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fda4af;
+}
+html.dark .bg-indigo-50,
+html.dark [class~="bg-indigo-50"],
+html.dark [class*=" bg-indigo-50/"],
+html.dark [class^="bg-indigo-50/"] {
+  background-color: rgba(49, 46, 129, 0.35);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+}
+html.dark .border-indigo-200,
+html.dark [class~="border-indigo-200"],
+html.dark [class*=" border-indigo-200/"] {
+  border-color: rgba(99, 102, 241, 0.35);
+}
+html.dark [class~="text-indigo-700"],
+html.dark [class~="text-indigo-800"] {
+  color: #c7d2fe;
+}
+html.dark .bg-blue-50,
+html.dark [class~="bg-blue-50"],
+html.dark [class*=" bg-blue-50/"],
+html.dark [class^="bg-blue-50/"] {
+  background-color: rgba(30, 58, 138, 0.4);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+html.dark .bg-teal-50,
+html.dark [class~="bg-teal-50"],
+html.dark [class*=" bg-teal-50/"],
+html.dark [class^="bg-teal-50/"],
+html.dark .bg-teal-100\/80 {
+  background-color: rgba(19, 78, 74, 0.5);
+  border-color: rgba(20, 184, 166, 0.4);
+  color: #5eead4;
+}
+
+/* Modals & Dialog backdrop */
+html.dark .bg-slate-900\/40,
+html.dark .bg-slate-900\/50 {
+  background-color: rgba(5, 8, 15, 0.75);
+}
+

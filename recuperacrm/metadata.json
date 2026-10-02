@@ -1,0 +1,7 @@
+{
+  "name": "Progrid+",
+  "description": "CRM Progrid+ de negociação e recuperação de crédito com pipeline kanban, contatos, linha do tempo de atividades e gestão de acordos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
