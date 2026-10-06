@@ -1,26 +1,184 @@
 @import "tailwindcss";
 
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   Tema e Tokens
+   ============================================================ */
 @theme {
-  --color-primary-50: #eef2ff;
+  --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  /* Paleta primária CRM */
+  --color-primary-50:  #eef2ff;
   --color-primary-100: #e0e7ff;
   --color-primary-500: #6366f1;
   --color-primary-600: #4f46e5;
   --color-primary-700: #4338ca;
 }
 
+/* ============================================================
+   CSS Variables — Modo Claro e Escuro
+   ============================================================ */
 @layer base {
   :root {
-    --color-surface: #ffffff;
-    --color-background: #f7f9fb;
-    --color-text: #191c1e;
+    --color-surface:     #ffffff;
+    --color-background:  #f7f9fb;
+    --color-text:        #191c1e;
+
+    /* Escala progressiva índigo invertida (mais escuro -> mais claro) */
+    --kanban-nova_posicao-bg: #d9e2fb;
+    --kanban-contato_em_andamento-bg: #e2e8fc;
+    --kanban-em_negociacao-bg: #ebf0fd;
+    --kanban-aguardando_pagamento-bg: #f2f5fe;
+    --kanban-encerrado_sem_pagamento-bg: #fdf4f4;
+    --kanban-quitado-bg: #edf9f2;
   }
+
   .dark {
-    --color-surface: #151d2e;
-    --color-background: #0b0f19;
-    --color-text: #e2e8f0;
+    --color-surface:     #151d2e;
+    --color-background:  #0b0f19;
+    --color-text:        #e2e8f0;
+
+    --kanban-nova_posicao-bg: #1b2b54;
+    --kanban-contato_em_andamento-bg: #162446;
+    --kanban-em_negociacao-bg: #121e38;
+    --kanban-aguardando_pagamento-bg: #0e172a;
+    --kanban-encerrado_sem_pagamento-bg: rgba(244, 63, 94, 0.07);
+    --kanban-quitado-bg: rgba(16, 185, 129, 0.07);
   }
-  
+
   html, body {
-    @apply bg-[var(--color-background)] text-[var(--color-text)] font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--color-background);
+    color: var(--color-text);
+    transition: background-color 0.2s cubic-bezier(0.4,0,0.2,1),
+                color            0.2s cubic-bezier(0.4,0,0.2,1);
   }
+
+  h1, h2, h3, h4 {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* ============================================================
+   Dark Mode — Superfícies
+   ============================================================ */
+html.dark .bg-white          { background-color: #151d2e; }
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/70,
+html.dark .bg-slate-50\/80   { background-color: #101624; }
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/80,
+html.dark .bg-slate-100\/90  { background-color: #131b2c; }
+html.dark .bg-slate-200      { background-color: #1e293b; }
+
+/* Header e Sidebar no dark */
+html.dark header {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  border-color: #1e293b !important;
+}
+html.dark aside#main-sidebar {
+  background-color: #0a0e18 !important;
+  border-color: #1a2333 !important;
+  color: #e2e8f0 !important;
+}
+
+/* ============================================================
+   Dark Mode — Bordas
+   ============================================================ */
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80  { border-color: #1e293b; }
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-800 > :not([hidden]) ~ :not([hidden]) { border-color: #1e293b; }
+
+/* ============================================================
+   Dark Mode — Texto
+   ============================================================ */
+html.dark .text-slate-900 { color: #f8fafc; }
+html.dark .text-slate-800 { color: #e2e8f0; }
+html.dark .text-slate-700 { color: #cbd5e1; }
+html.dark .text-slate-600 { color: #94a3b8; }
+html.dark .text-slate-500 { color: #718096; }
+
+/* ============================================================
+   Dark Mode — Hover
+   ============================================================ */
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-50\/70:hover  { background-color: #1c263c; }
+html.dark .hover\:bg-slate-100:hover     { background-color: #1e293b; }
+html.dark .hover\:text-slate-900:hover   { color: #f8fafc; }
+html.dark .hover\:bg-slate-800\/50:hover { background-color: rgba(30, 41, 59, 0.5); }
+
+/* ============================================================
+   Dark Mode — Inputs
+   ============================================================ */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: #64748b; }
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus         { border-color: #6366f1; }
+
+/* ============================================================
+   Dark Mode — Sombras
+   ============================================================ */
+html.dark .shadow-2xs,
+html.dark .shadow-xs,
+html.dark .shadow-sm,
+html.dark .shadow-md { box-shadow: 0 4px 20px -2px rgba(0,0,0,0.45); }
+
+/* ============================================================
+   Dark Mode — Badges e Acentos
+   ============================================================ */
+html.dark .bg-indigo-50,
+html.dark .bg-indigo-50\/80 {
+  background-color: rgba(49, 46, 129, 0.35);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+}
+html.dark .border-indigo-200  { border-color: rgba(99, 102, 241, 0.35); }
+html.dark .text-indigo-700    { color: #c7d2fe; }
+
+html.dark .bg-emerald-50 {
+  background-color: rgba(6, 78, 59, 0.35);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+html.dark .bg-rose-50 {
+  background-color: rgba(136, 19, 55, 0.35);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fda4af;
+}
+
+/* ============================================================
+   Scrollbar custom
+   ============================================================ */
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+html.dark .custom-scrollbar { scrollbar-color: #334155 transparent; }
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ============================================================
+   Modal — Animação de entrada
+   ============================================================ */
+@keyframes modalEntrada {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
 }

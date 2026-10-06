@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ProgridPlus.Api.Auth;
+using ProgridPlus.Api.Contatos;
 using ProgridPlus.Api.Data;
 using ProgridPlus.Api.Seguranca;
 
@@ -45,6 +46,17 @@ builder.Services.AddDbContext<CrmDbContext>(options =>
 // SegurancaConsulta: executa a query de acesso CRM no schema seguranca (somente leitura).
 // Registrado como Scoped para ter a mesma vida util da request HTTP.
 builder.Services.AddScoped<SegurancaConsulta>();
+
+// ContatosConsulta: executa queries de leitura no schema core.pessoa / core.pessoa_contato.
+// Somente leitura — o CRM não cria tabela própria de contatos.
+builder.Services.AddScoped<ContatosConsulta>();
+
+// NegociosConsulta: executa queries de leitura no schema crm.
+builder.Services.AddScoped<ProgridPlus.Api.Negocios.NegociosConsulta>();
+
+// NegocioComando: serviço de escrita no schema crm (criação de negócios).
+builder.Services.AddScoped<ProgridPlus.Api.Negocios.NegocioComando>();
+
 
 // Authentication via Keycloak JWT Bearer
 var authority = builder.Configuration.GetValue<string>("Authentication:Authority")

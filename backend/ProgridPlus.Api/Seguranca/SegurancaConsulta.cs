@@ -59,6 +59,37 @@ public sealed class SegurancaConsulta
         WHERE u.keycloak_sub = @sub;
         """;
 
+    private const string QueryListarUsuarios = """
+        SELECT
+            u.id        AS UsuarioId,
+            u.nome      AS Nome,
+            u.username  AS Username,
+            u.email     AS Email
+        FROM seguranca.usuario u
+        WHERE u.ativo = true
+          AND (
+               @busca = ''
+            OR u.nome     ILIKE '%' || @busca || '%'
+            OR u.username ILIKE '%' || @busca || '%'
+            OR u.email    ILIKE '%' || @busca || '%'
+          )
+        ORDER BY u.nome;
+        """;
+
+    /// <summary>
+    /// Retorna os usuários ativos do schema seguranca com filtro opcional.
+    /// Somente leitura — o CRM nunca altera seguranca.*.
+    /// </summary>
+    public async Task<IReadOnlyList<UsuarioListaDto>> ListarUsuariosAsync(
+        string busca, CancellationToken ct = default)
+    {
+        busca = (busca ?? string.Empty).Trim();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        var rows = await conn.QueryAsync<UsuarioListaDto>(
+            new CommandDefinition(QueryListarUsuarios, new { busca }, cancellationToken: ct));
+        return rows.AsList();
+    }
+
     /// <summary>
     /// Retorna os dados de acesso do usuário identificado pelo sub do JWT,
     /// ou null se o sub não existir em seguranca.usuario.
