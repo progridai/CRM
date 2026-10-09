@@ -29,8 +29,24 @@ public class UsersController : ControllerBase
         [FromQuery] string busca = "",
         CancellationToken ct    = default)
     {
-        var usuarios = await _seguranca.ListarUsuariosAsync(busca, ct);
-        return Ok(new { total = usuarios.Count, itens = usuarios });
+        var todosUsuarios = await _seguranca.ListarUsuariosAsync(ct);
+        busca = (busca ?? string.Empty).Trim();
+
+        IReadOnlyList<UsuarioListaDto> usuarios = string.IsNullOrEmpty(busca)
+            ? todosUsuarios
+            : todosUsuarios
+                .Where(usuario =>
+                    usuario.Nome.Contains(busca, StringComparison.OrdinalIgnoreCase) ||
+                    usuario.Username.Contains(busca, StringComparison.OrdinalIgnoreCase) ||
+                    usuario.Email.Contains(busca, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        var resumo = new UsuarioResumoDto(
+            PosicoesEmAberto: todosUsuarios.Sum(usuario => usuario.PosicoesEmAberto),
+            PosicoesRecuperadas: todosUsuarios.Sum(usuario => usuario.PosicoesRecuperadas),
+            RecuperadoNoMes: todosUsuarios.Sum(usuario => usuario.RecuperadoNoMes));
+
+        return Ok(new { total = usuarios.Count, itens = usuarios, resumo });
     }
 
     /// <summary>

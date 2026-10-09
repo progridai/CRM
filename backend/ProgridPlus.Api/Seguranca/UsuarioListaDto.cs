@@ -5,8 +5,17 @@ namespace ProgridPlus.Api.Seguranca;
 /// Somente leitura — o CRM não gerencia usuários.
 /// </summary>
 public sealed record UsuarioListaDto(
-    long   UsuarioId,
-    string Nome,
-    string Username,
-    string Email
+    long    UsuarioId,
+    string  Nome,
+    string  Username,
+    string  Email,
+    long    PosicoesEmAberto,
+    long    PosicoesRecuperadas,
+    decimal RecuperadoNoMes
+);
+
+public sealed record UsuarioResumoDto(
+    long    PosicoesEmAberto,
+    long    PosicoesRecuperadas,
+    decimal RecuperadoNoMes
 );

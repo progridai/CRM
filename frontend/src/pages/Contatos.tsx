@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, User, Phone, FileText, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, User, Phone, FileText, Loader2, AlertCircle, RefreshCw, MessageCircle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { listarContatos } from '../services/contatosService';
 import type { ContatoDto } from '../services/contatosService';
+import { formatCurrency } from '../utils';
 
 // ─── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -36,6 +38,16 @@ function formatTelefone(tel: string): string {
   return tel;
 }
 
+function getWhatsAppLink(tel: string): string {
+  const digits = tel.replace(/\D/g, '');
+  const internationalNumber = digits.startsWith('55') ? digits : `55${digits}`;
+  return `https://wa.me/${internationalNumber}`;
+}
+
+function withOpacity(color: string, opacity: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${opacity}` : color;
+}
+
 /** Capitaliza o nome (todas as palavras com >= 3 letras) */
 function formatNome(nome: string): string {
   const artigos = new Set(['de','da','do','das','dos','e','a','o','em','na','no']);
@@ -54,8 +66,10 @@ const DEBOUNCE_MS    = 350;
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export const ContatosPage: React.FC = () => {
-  const [busca, setBusca]           = useState('');
-  const [buscaInput, setBuscaInput] = useState('');
+  const [searchParams] = useSearchParams();
+  const buscaInicial = searchParams.get('busca')?.trim() ?? '';
+  const [busca, setBusca]           = useState(buscaInicial);
+  const [buscaInput, setBuscaInput] = useState(buscaInicial);
   const [contatos, setContatos]     = useState<ContatoDto[]>([]);
   const [total, setTotal]           = useState(0);
   const [pagina, setPagina]         = useState(1);
@@ -63,6 +77,12 @@ export const ContatosPage: React.FC = () => {
   const [erro, setErro]             = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setBusca(buscaInicial);
+    setBuscaInput(buscaInicial);
+    setPagina(1);
+  }, [buscaInicial]);
 
   // ── Busca com debounce ────────────────────────────────────────────────────
   const handleBuscaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,7 +180,8 @@ export const ContatosPage: React.FC = () => {
 
         {/* Tabela de dados */}
         {!carregando && !erro && (
-          <table className="w-full text-left border-collapse text-xs">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700
                              text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
@@ -182,27 +203,29 @@ export const ContatosPage: React.FC = () => {
                     Telefone Principal
                   </div>
                 </th>
-                {/* Colunas previstas — sem dados nesta fase */}
-                <th className="p-3.5 text-slate-300 dark:text-slate-600">Origem</th>
-                <th className="p-3.5 text-slate-300 dark:text-slate-600">Total em Débito</th>
-                <th className="p-3.5 text-slate-300 dark:text-slate-600">Status</th>
+                <th className="p-3.5">Origem</th>
+                <th className="p-3.5">Status Geral</th>
+                <th className="p-3.5">Total em Débito</th>
+                <th className="p-3.5 text-right pr-4">Ação Direta</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {contatos.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
+                    <td colSpan={7} className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">
                     {busca
                       ? `Nenhum contato encontrado para "${busca}".`
                       : 'Nenhum contato cadastrado.'}
                   </td>
                 </tr>
               ) : (
-                contatos.map((c) => (
-                  <tr
-                    key={c.pessoaId}
-                    className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors"
-                  >
+                contatos.map((c) => {
+                  const statusColor = c.statusCorHex || '#6366f1';
+                  const telefoneDigits = c.telefonePrincipal?.replace(/\D/g, '') ?? '';
+                  const whatsappHabilitado = telefoneDigits.length >= 10;
+
+                  return (
+                  <tr key={c.pessoaId} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
                     {/* Nome */}
                     <td className="p-3.5 pl-4 font-semibold text-slate-900 dark:text-slate-100 max-w-xs">
                       <span className="truncate block">{formatNome(c.nome)}</span>
@@ -228,15 +251,64 @@ export const ContatosPage: React.FC = () => {
                       )}
                     </td>
 
-                    {/* Colunas futuras — placeholder visual */}
-                    <td className="p-3.5 text-slate-300 dark:text-slate-700">—</td>
-                    <td className="p-3.5 text-slate-300 dark:text-slate-700">—</td>
-                    <td className="p-3.5 text-slate-300 dark:text-slate-700">—</td>
+                    {/* Origem do negócio mais recente */}
+                    <td className="p-3.5 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title={c.origem || undefined}>
+                      {c.origem || '—'}
+                    </td>
+
+                    {/* Status do negócio mais recente */}
+                    <td className="p-3.5">
+                      {c.statusCodigo ? (
+                        <span
+                          className="inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                          style={{
+                            color: statusColor,
+                            borderColor: withOpacity(statusColor, '55'),
+                            backgroundColor: withOpacity(statusColor, '18'),
+                          }}
+                        >
+                          {c.statusGeral}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-600">Sem negócio</span>
+                      )}
+                    </td>
+
+                    {/* Soma de todos os negócios ativos do cliente */}
+                    <td className="p-3.5 font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      {formatCurrency(c.totalEmDebito ?? 0)}
+                    </td>
+
+                    {/* WhatsApp habilitado somente quando existe telefone válido */}
+                    <td className="p-3.5 pr-4 text-right">
+                      {whatsappHabilitado ? (
+                        <a
+                          href={getWhatsAppLink(c.telefonePrincipal)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#20bd5a]"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 fill-white/20" strokeWidth={2.2} />
+                          WhatsApp
+                        </a>
+                      ) : (
+                        <span
+                          aria-disabled="true"
+                          title="Telefone não cadastrado"
+                          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-400 dark:bg-slate-800 dark:text-slate-600"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.2} />
+                          WhatsApp
+                        </span>
+                      )}
+                    </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

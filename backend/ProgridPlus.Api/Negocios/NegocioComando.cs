@@ -232,7 +232,7 @@ public sealed class NegocioComando
                         competenciaMes,
                         competenciaInt,
                         dataVencimento = cmd.DataVencimento,
-                        origem        = string.IsNullOrWhiteSpace(cmd.Origem) ? null : cmd.Origem.Trim(),
+                        origem        = string.IsNullOrWhiteSpace(cmd.Origem) ? "Manual" : cmd.Origem.Trim(),
                         notas         = string.IsNullOrWhiteSpace(cmd.Notas)  ? null : cmd.Notas.Trim()
                     },
                     transaction: tx,

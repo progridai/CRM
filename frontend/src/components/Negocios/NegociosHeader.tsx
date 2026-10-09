@@ -1,60 +1,63 @@
-import React from 'react';
-import { Search, Kanban, List, Plus, TrendingUp, Wallet, Clock, PhoneMissed, Target } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Search, Kanban, List, Plus } from 'lucide-react';
 import type { ViewMode } from '../../types';
 import { formatCurrency } from '../../utils';
-import type { NegocioDto, EtapaDto } from '../../services/negociosService';
+import type { NegocioDto } from '../../services/negociosService';
+import {
+  computeIndicators,
+  getCompetenceValue,
+  type NegociosFilters,
+} from './negociosIndicators';
 
 interface NegociosHeaderProps {
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
   onNovoNegocio: () => void;
-  negocios?: NegocioDto[];
-  etapas?: EtapaDto[];
+  negocios: NegocioDto[];
+  todosNegocios: NegocioDto[];
+  filters: NegociosFilters;
+  onFiltersChange: (filters: NegociosFilters) => void;
 }
 
-function computeIndicators(negocios: NegocioDto[], etapas: EtapaDto[]) {
-  // 1. Saldo a recuperar: Not quitado
-  const abertos = negocios.filter(n => n.etapaCodigo !== 'quitado');
-  const saldoRecuperar = abertos.reduce((s, n) => s + n.valor, 0);
-  const clientesAbertos = abertos.length;
-
-  // 2. Recuperado no mês: Quitado
-  const quitados = negocios.filter(n => n.etapaCodigo === 'quitado');
-  const recuperadoMes = quitados.reduce((s, n) => s + n.valor, 0);
-  const clientesQuitados = quitados.length;
-
-  // 3. Aguardando pagamento
-  const aguardando = negocios.filter(n => n.etapaCodigo === 'aguardando_pagamento');
-  const aguardandoValor = aguardando.reduce((s, n) => s + n.valor, 0);
-  const clientesAguardando = aguardando.length;
-
-  // 4. Sem contato (No protótipo era 'nova_posicao')
-  const semContato = negocios.filter(n => n.etapaCodigo === 'nova_posicao');
-  const semContatoValor = semContato.reduce((s, n) => s + n.valor, 0);
-  const clientesSemContato = semContato.length;
-
-  // 5. Progresso da meta
-  const metaValor = saldoRecuperar + recuperadoMes;
-  const metaPercent = metaValor > 0 ? Math.min(100, Math.round((recuperadoMes / metaValor) * 100)) : 0;
-
-  return {
-    saldoRecuperar, clientesAbertos,
-    recuperadoMes, clientesQuitados,
-    aguardandoValor, clientesAguardando,
-    semContatoValor, clientesSemContato,
-    metaValor,
-    metaPercent,
-  };
-}
+const MESES_ABREV = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+];
 
 export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
   viewMode,
   setViewMode,
   onNovoNegocio,
-  negocios = [],
-  etapas = [],
+  negocios,
+  todosNegocios,
+  filters,
+  onFiltersChange,
 }) => {
-  const ind = computeIndicators(negocios, etapas);
+  const ind = computeIndicators(negocios);
+
+  const competenceOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    todosNegocios.forEach((negocio) => {
+      const value = getCompetenceValue(negocio);
+      const month = MESES_ABREV[negocio.competenciaMes - 1] ?? String(negocio.competenciaMes);
+      options.set(value, `${month}/${negocio.competenciaAno}`);
+    });
+    return [...options.entries()]
+      .sort(([valueA], [valueB]) => valueB.localeCompare(valueA))
+      .map(([value, label]) => ({ value, label }));
+  }, [todosNegocios]);
+
+  const originOptions = useMemo(
+    () => [...new Set(todosNegocios.map((negocio) => negocio.origem).filter(Boolean) as string[])]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [todosNegocios],
+  );
+
+  const ownerOptions = useMemo(
+    () => [...new Set(todosNegocios.map((negocio) => negocio.nomeOperador).filter(Boolean) as string[])]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [todosNegocios],
+  );
 
   return (
     <div className="flex flex-col gap-5 w-full mb-6">
@@ -65,43 +68,58 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
             <input
-              type="text"
+              type="search"
+              value={filters.search}
+              onChange={(event) => onFiltersChange({ ...filters, search: event.target.value })}
               placeholder="Filtrar por nome, documento ou referência"
               className="h-8 pl-8 pr-3 w-72 sm:w-80 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500 transition-all font-medium"
-              readOnly
             />
           </div>
 
-          {/* Filtros individuais */}
-          <div className="relative">
-            <button
-              type="button"
-              className="h-8 px-2.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all font-medium select-none bg-slate-50 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 cursor-not-allowed opacity-80"
+          <label className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+            <span className="text-xs text-slate-400 whitespace-nowrap">Competência:</span>
+            <select
+              aria-label="Filtrar por competência"
+              value={filters.competence}
+              onChange={(event) => onFiltersChange({ ...filters, competence: event.target.value })}
+              className="text-xs font-semibold text-slate-800 dark:text-slate-100 bg-transparent outline-none cursor-pointer"
             >
-              <span className="text-slate-400 font-normal">Competência:</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-100">Todas</span>
-            </button>
-          </div>
+              <option value="Todas">Todas</option>
+              {competenceOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
 
-          <div className="relative">
-            <button
-              type="button"
-              className="h-8 px-2.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all font-medium select-none bg-slate-50 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 cursor-not-allowed opacity-80"
+          <label className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+            <span className="text-xs text-slate-400 whitespace-nowrap">Origem:</span>
+            <select
+              aria-label="Filtrar por origem"
+              value={filters.origin}
+              onChange={(event) => onFiltersChange({ ...filters, origin: event.target.value })}
+              className="max-w-36 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-transparent outline-none cursor-pointer"
             >
-              <span className="text-slate-400 font-normal">Origem:</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-100">Todas</span>
-            </button>
-          </div>
+              <option value="Todas">Todas</option>
+              {originOptions.map((origin) => (
+                <option key={origin} value={origin}>{origin}</option>
+              ))}
+            </select>
+          </label>
 
-          <div className="relative">
-            <button
-              type="button"
-              className="h-8 px-2.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all font-medium select-none bg-slate-50 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 cursor-not-allowed opacity-80"
+          <label className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+            <span className="text-xs text-slate-400 whitespace-nowrap">Operador:</span>
+            <select
+              aria-label="Filtrar por operador"
+              value={filters.owner}
+              onChange={(event) => onFiltersChange({ ...filters, owner: event.target.value })}
+              className="max-w-36 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-transparent outline-none cursor-pointer"
             >
-              <span className="text-slate-400 font-normal">Operador:</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-100">Todos</span>
-            </button>
-          </div>
+              <option value="Todos">Todos</option>
+              {ownerOptions.map((owner) => (
+                <option key={owner} value={owner}>{owner}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {/* Right: View Mode Toggle & Primary Action */}
@@ -150,85 +168,68 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
 
         {/* 1 — Saldo a Recuperar */}
         <div className="bg-white dark:bg-slate-900/90 p-3 px-4 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Saldo a Recuperar</span>
-            <Wallet className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />
-          </div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Saldo a Recuperar</span>
           <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 leading-none">
-            {formatCurrency(ind.saldoRecuperar)}
+            {formatCurrency(ind.openAmount)}
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            {ind.clientesAbertos} {ind.clientesAbertos === 1 ? 'posição em aberto' : 'posições em aberto'}
+            {ind.openCount} {ind.openCount === 1 ? 'posição em aberto' : 'posições em aberto'}
           </span>
         </div>
 
         {/* 2 — Recuperado no Mês */}
         <div className="bg-white dark:bg-slate-900/90 p-3 px-4 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recuperado no Mês</span>
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-400 dark:text-emerald-600" />
-          </div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recuperado no Mês</span>
           <span className="font-display text-lg font-bold tracking-tight text-emerald-600 dark:text-emerald-400 leading-none">
-            {formatCurrency(ind.recuperadoMes)}
+            {formatCurrency(ind.recoveredAmount)}
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            {ind.clientesQuitados} {ind.clientesQuitados === 1 ? 'posição quitada' : 'posições quitadas'}
+            {ind.recoveredCount} {ind.recoveredCount === 1 ? 'posição recuperada' : 'posições recuperadas'}
           </span>
         </div>
 
         {/* 3 — Aguardando Pagamento */}
         <div className="bg-white dark:bg-slate-900/90 p-3 px-4 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aguardando Pagamento</span>
-            <Clock className="w-3.5 h-3.5 text-amber-400 dark:text-amber-600" />
-          </div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aguardando Pagamento</span>
           <span className="font-display text-lg font-bold tracking-tight text-amber-600 dark:text-amber-400 leading-none">
-            {formatCurrency(ind.aguardandoValor)}
+            {formatCurrency(ind.waitingPaymentAmount)}
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            {ind.clientesAguardando} {ind.clientesAguardando === 1 ? 'negociação acordada' : 'negociações acordadas'}
+            {ind.waitingPaymentCount} {ind.waitingPaymentCount === 1 ? 'posição nessa etapa' : 'posições nessa etapa'}
           </span>
         </div>
 
         {/* 4 — Sem Contato */}
         <div className="bg-white dark:bg-slate-900/90 p-3 px-4 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sem Contato</span>
-            <PhoneMissed className="w-3.5 h-3.5 text-rose-400 dark:text-rose-600" />
-          </div>
-          <span className="font-display text-lg font-bold tracking-tight text-rose-600 dark:text-rose-400 leading-none">
-            {formatCurrency(ind.semContatoValor)}
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sem Contato</span>
+          <span className="font-display text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 leading-none">
+            {formatCurrency(ind.noContactAmount)}
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            {ind.clientesSemContato} {ind.clientesSemContato === 1 ? 'devedor inalcançável' : 'devedores inalcançáveis'}
+            {ind.noContactCount} {ind.noContactCount === 1 ? 'posição nessa etapa' : 'posições nessa etapa'}
           </span>
         </div>
 
         {/* 5 — Progresso da Meta */}
-        <div className="bg-white dark:bg-slate-900/90 p-3 px-4 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-col gap-1 hidden lg:flex">
+        <div className="bg-white dark:bg-slate-900/90 p-3 px-4 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-col gap-1 col-span-2 md:col-span-1 lg:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progresso da Meta</span>
-            <div className="flex items-center gap-1">
-              <Target className="w-3.5 h-3.5 text-indigo-400 dark:text-indigo-600" />
-              <span className={`text-[10px] font-bold ${ind.metaPercent >= 100 ? 'text-emerald-600' : ind.metaPercent >= 50 ? 'text-amber-600' : 'text-indigo-600'} dark:text-indigo-400`}>
-                {ind.metaPercent}%
-              </span>
-            </div>
+            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+              {ind.targetPercent}%
+            </span>
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="font-display text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight leading-none">
-              {formatCurrency(ind.recuperadoMes)}
+              {formatCurrency(ind.recoveredAmount)}
             </span>
             <span className="text-[10px] text-slate-400 font-medium">
-              / {formatCurrency(ind.metaValor || ind.saldoRecuperar)}
+              / {formatCurrency(ind.targetAmount)}
             </span>
           </div>
           <div className="w-full bg-slate-100 dark:bg-slate-800/80 rounded-full h-1.5 mt-1 overflow-hidden border border-slate-200/50 dark:border-slate-700/50">
             <div
-              className={`h-full rounded-full transition-all duration-700 ease-out ${
-                ind.metaPercent >= 100 ? 'bg-emerald-500' : ind.metaPercent >= 50 ? 'bg-amber-500' : 'bg-indigo-500'
-              }`}
-              style={{ width: `${ind.metaPercent}%` }}
+              className="h-full rounded-full bg-indigo-500 transition-all duration-700 ease-out"
+              style={{ width: `${Math.min(100, ind.targetPercent)}%` }}
             />
           </div>
         </div>

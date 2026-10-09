@@ -1,14 +1,25 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { listarEtapas, listarNegocios, type EtapaDto, type NegocioDto } from '../services/negociosService';
 import { NegociosHeader } from '../components/Negocios/NegociosHeader';
 import { KanbanBoard } from '../components/Negocios/KanbanBoard';
+import { NegociosListView } from '../components/Negocios/NegociosListView';
 import { NovoNegocioModal } from '../components/Negocios/NovoNegocioModal';
 import { NegocioDetalhesDrawer } from '../components/Negocios/NegocioDetalhesDrawer';
 import { QuickActivitiesDrawer } from '../components/Negocios/QuickActivitiesDrawer';
+import {
+  DEFAULT_NEGOCIOS_FILTERS,
+  filterNegocios,
+  type NegociosFilters,
+} from '../components/Negocios/negociosIndicators';
 import type { ViewMode } from '../types';
 
 export const NegociosPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const operadorFiltroInicial = searchParams.get('operador')?.trim();
+  const negocioSelecionadoId = searchParams.get('negocio')?.trim();
+  const abrirNovoNegocio = searchParams.get('novo') === '1';
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [etapas, setEtapas]     = useState<EtapaDto[]>([]);
   const [negocios, setNegocios] = useState<NegocioDto[]>([]);
@@ -17,6 +28,15 @@ export const NegociosPage: React.FC = () => {
   const [modalAberto, setModalAberto] = useState(false);
   const [selectedNegocio, setSelectedNegocio] = useState<NegocioDto | null>(null);
   const [quickActivitiesOpen, setQuickActivitiesOpen] = useState(false);
+  const [filters, setFilters] = useState<NegociosFilters>(() => ({
+    ...DEFAULT_NEGOCIOS_FILTERS,
+    owner: operadorFiltroInicial || DEFAULT_NEGOCIOS_FILTERS.owner,
+  }));
+
+  const negociosFiltrados = useMemo(
+    () => filterNegocios(negocios, filters),
+    [negocios, filters],
+  );
 
   // ── Carregamento das etapas e negócios ─────────────────────────────────────
   const carregarDados = useCallback(async () => {
@@ -38,6 +58,28 @@ export const NegociosPage: React.FC = () => {
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
+
+  useEffect(() => {
+    if (loading || !negocioSelecionadoId) return;
+
+    const negocioSelecionado = negocios.find(
+      (negocio) => negocio.publicId === negocioSelecionadoId,
+    );
+    if (negocioSelecionado) setSelectedNegocio(negocioSelecionado);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('negocio');
+    setSearchParams(nextParams, { replace: true });
+  }, [loading, negocioSelecionadoId, negocios, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!abrirNovoNegocio) return;
+
+    setModalAberto(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('novo');
+    setSearchParams(nextParams, { replace: true });
+  }, [abrirNovoNegocio, searchParams, setSearchParams]);
 
   // ── Callback chamado após criação bem-sucedida do negócio ─────────────────
   const handleNegocioCriado = useCallback(() => {
@@ -81,8 +123,10 @@ export const NegociosPage: React.FC = () => {
         viewMode={viewMode}
         setViewMode={setViewMode}
         onNovoNegocio={() => setModalAberto(true)}
-        negocios={negocios}
-        etapas={etapas}
+        negocios={negociosFiltrados}
+        todosNegocios={negocios}
+        filters={filters}
+        onFiltersChange={setFilters}
       />
 
       {erro && (
@@ -99,16 +143,19 @@ export const NegociosPage: React.FC = () => {
       ) : viewMode === 'kanban' ? (
         <KanbanBoard 
           etapas={etapas} 
-          negocios={negocios} 
+          negocios={negociosFiltrados}
           onCardClick={setSelectedNegocio} 
           onDropCard={handleDropCard} 
           onOpenQuickActivitiesManager={() => setQuickActivitiesOpen(true)}
           onAtividadeRegistrada={carregarDados}
         />
       ) : (
-        <div className="flex-1 flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-          <p className="text-slate-500 text-sm">Visão de Lista (em breve)</p>
-        </div>
+        <NegociosListView
+          etapas={etapas}
+          negocios={negociosFiltrados}
+          onSelectNegocio={setSelectedNegocio}
+          onUpdateEtapa={handleDropCard}
+        />
       )}
 
       {/* Modal de Novo Negócio */}

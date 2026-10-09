@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Loader2, X, Phone, MessageCircle, MessageSquare, Zap, ExternalLink, FileText, CreditCard, ArrowLeft, Check, Plus } from 'lucide-react';
+import { Loader2, X, Phone, MessageCircle, MessageSquare, Zap, ExternalLink, FileText, CreditCard } from 'lucide-react';
 import { listarAtividades, registrarAtividade, type AtividadeDto, type EtapaDto, type NegocioDto } from '../../services/negociosService';
 import { useQuickActivityTemplates } from '../../hooks/useQuickActivityTemplates';
+import { getNameInitial } from '../../utils';
 
 interface KanbanBoardProps {
   etapas: EtapaDto[];
@@ -27,7 +28,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
   const [selectedNegocioId, setSelectedNegocioId] = useState<string | null>(null);
   const [submittingAtividade, setSubmittingAtividade] = useState(false);
 
-  const { templates: shortcuts, loading: loadingShortcuts, refresh: refreshShortcuts } = useQuickActivityTemplates();
+  const { templates: shortcuts, loading: loadingShortcuts } = useQuickActivityTemplates();
 
   const handleOpenAtividades = async (e: React.MouseEvent, chave: string, idsStr: string) => {
     e.stopPropagation();
@@ -172,7 +173,20 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                           className="group/card relative bg-white dark:bg-slate-900/90 p-3 rounded-xl shadow-2xs hover:shadow-md transition-all duration-150 border border-slate-200/80 dark:border-slate-800/90 hover:border-slate-300 dark:hover:border-slate-700 flex flex-col gap-2 cursor-grab active:cursor-grabbing"
                         >
                           {/* Cabeçalho do Grupo */}
-                          <div className="flex items-start justify-between">
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            title={`Abrir primeiro negócio de ${primeiro.nomeCliente}`}
+                            onClick={() => onCardClick(primeiro)}
+                            onKeyDown={(event) => {
+                              if (event.target !== event.currentTarget) return;
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                onCardClick(primeiro);
+                              }
+                            }}
+                            className="flex cursor-pointer items-start justify-between rounded-md outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                          >
                             <div className="min-w-0 flex-1">
                               <h3 className="font-display font-semibold text-xs text-slate-900 dark:text-slate-100 tracking-tight truncate">
                                 {primeiro.nomeCliente}
@@ -360,8 +374,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                                 className={`flex items-center justify-between py-2 cursor-grab active:cursor-grabbing hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-1 px-1 rounded transition-colors ${idx > 0 ? 'border-t border-slate-100 dark:border-slate-800/80' : ''}`}
                               >
                                 <div className="flex items-center gap-2 shrink-0">
-                                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border shrink-0 bg-indigo-50 text-indigo-600 border-indigo-200" title="Responsável: Helena">
-                                    H
+                                  <div
+                                    className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border shrink-0 bg-indigo-50 text-indigo-600 border-indigo-200"
+                                    title={`Responsável: ${negocio.nomeOperador?.trim() || 'Sem responsável'}`}
+                                  >
+                                    {getNameInitial(negocio.nomeOperador)}
                                   </div>
                                   <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                                     {negocio.dataVencimento

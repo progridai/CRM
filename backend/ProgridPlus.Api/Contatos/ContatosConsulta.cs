@@ -26,7 +26,12 @@ public sealed class ContatosConsulta
             p.nome                    AS Nome,
             p.documento_principal     AS Documento,
             p.tipo_pessoa             AS TipoPessoa,
-            COALESCE(pc.valor, '')    AS TelefonePrincipal
+            COALESCE(pc.valor, '')    AS TelefonePrincipal,
+            COALESCE(ultimo_negocio.origem, '') AS Origem,
+            COALESCE(totais.total_em_debito, 0) AS TotalEmDebito,
+            COALESCE(ultimo_negocio.etapa_nome, 'Sem negócio') AS StatusGeral,
+            COALESCE(ultimo_negocio.etapa_codigo, '') AS StatusCodigo,
+            ultimo_negocio.etapa_cor_hex AS StatusCorHex
         FROM cadastro.cliente cl
         INNER JOIN core.pessoa p
             ON  p.id           = cl.pessoa_id
@@ -36,6 +41,27 @@ public sealed class ContatosConsulta
             AND pc.tipo_contato = 'telefone'
             AND pc.principal    = true
             AND pc.ativo        = true
+        LEFT JOIN LATERAL (
+            SELECT COALESCE(SUM(n.valor), 0) AS total_em_debito
+            FROM crm.negocio n
+            WHERE n.cliente_id = cl.id
+              AND n.ativo = true
+              AND n.deleted_at IS NULL
+        ) totais ON true
+        LEFT JOIN LATERAL (
+            SELECT
+                n.origem,
+                etapa.nome AS etapa_nome,
+                etapa.codigo AS etapa_codigo,
+                etapa.cor_hex AS etapa_cor_hex
+            FROM crm.negocio n
+            INNER JOIN crm.negocio_etapa etapa ON etapa.id = n.etapa_id
+            WHERE n.cliente_id = cl.id
+              AND n.ativo = true
+              AND n.deleted_at IS NULL
+            ORDER BY n.created_at DESC, n.id DESC
+            LIMIT 1
+        ) ultimo_negocio ON true
         WHERE (
                @busca = ''
             OR p.nome_normalizado          ILIKE '%' || @busca || '%'
@@ -104,7 +130,12 @@ public sealed class ContatosConsulta
                 r.Nome ?? string.Empty,
                 r.Documento ?? string.Empty,
                 r.TipoPessoa,
-                r.TelefonePrincipal ?? string.Empty))
+                r.TelefonePrincipal ?? string.Empty,
+                r.Origem ?? string.Empty,
+                r.TotalEmDebito,
+                r.StatusGeral ?? "Sem negócio",
+                r.StatusCodigo ?? string.Empty,
+                r.StatusCorHex))
             .ToList();
 
         return new ContatosPaginadosDto(
@@ -124,5 +155,10 @@ public sealed class ContatosConsulta
         public string? Documento         { get; init; }
         public int     TipoPessoa        { get; init; }
         public string? TelefonePrincipal { get; init; }
+        public string? Origem            { get; init; }
+        public decimal TotalEmDebito     { get; init; }
+        public string? StatusGeral       { get; init; }
+        public string? StatusCodigo      { get; init; }
+        public string? StatusCorHex      { get; init; }
     }
 }

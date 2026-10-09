@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Briefcase, Calendar, Phone, FileText, MapPin, Tag, MessageCircle, Plus, Copy, Check, MessageSquare, Loader2, CreditCard, Trash2 } from 'lucide-react';
+import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2 } from 'lucide-react';
 import type { NegocioDto, EtapaDto } from '../../services/negociosService';
 import { DealHistoryTimeline } from './DealHistoryTimeline';
+import { getNameInitial } from '../../utils';
 
 interface NegocioDetalhesDrawerProps {
   negocio: NegocioDto | null;
@@ -106,9 +107,8 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
 
   if (!isOpen || !negocio) return null;
 
-  // Encontra a etapa atual
-  const etapaAtual = etapas.find(e => e.codigo === negocio.etapaCodigo);
-  const colorHex = etapaAtual?.corHex || '#6366f1';
+  const etapaAtual = etapas.find((etapa) => etapa.codigo === negocio.etapaCodigo);
+  const nomeOperador = negocio.nomeOperador?.trim() || 'Sem responsável';
 
   return (
     <>
@@ -317,10 +317,13 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                 <div className="flex flex-col">
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Responsável Atual</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <div className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold border shrink-0 bg-indigo-100 text-indigo-700 border-indigo-200">
-                      H
+                    <div
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold border shrink-0 bg-indigo-100 text-indigo-700 border-indigo-200"
+                      title={`Responsável: ${nomeOperador}`}
+                    >
+                      {getNameInitial(negocio.nomeOperador)}
                     </div>
-                    <span className="text-xs font-medium text-slate-800 dark:text-slate-200">Helena</span>
+                    <span className="text-xs font-medium text-slate-800 dark:text-slate-200">{nomeOperador}</span>
                   </div>
                 </div>
 

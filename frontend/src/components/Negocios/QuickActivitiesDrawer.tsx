@@ -69,13 +69,6 @@ export const QuickActivitiesDrawer: React.FC<QuickActivitiesDrawerProps> = ({ is
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
 
-    const channelMap: Record<string, string> = {
-      whatsapp: 'WhatsApp',
-      ligacao: 'Ligação',
-      pagamento: 'Pagamento',
-      anotacao: 'Anotação'
-    };
-
     const cmd: SalvarAtividadeAtalhoCommand = {
       nome: cleanTitle,
       tipo: channel,

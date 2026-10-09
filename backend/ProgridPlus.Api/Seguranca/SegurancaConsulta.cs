@@ -60,33 +60,64 @@ public sealed class SegurancaConsulta
         """;
 
     private const string QueryListarUsuarios = """
+        WITH ultima_recuperacao AS (
+            SELECT
+                h.negocio_id,
+                MAX(h.ocorrido_em) AS recuperado_em
+            FROM crm.negocio_historico h
+            INNER JOIN crm.negocio_etapa etapa_historico
+                ON etapa_historico.id = h.etapa_nova_id
+               AND etapa_historico.classificacao = 'fechada_positiva'
+            GROUP BY h.negocio_id
+        )
         SELECT
-            u.id        AS UsuarioId,
-            u.nome      AS Nome,
-            u.username  AS Username,
-            u.email     AS Email
+            u.id                    AS UsuarioId,
+            COALESCE(u.nome, '')    AS Nome,
+            COALESCE(u.username, '') AS Username,
+            COALESCE(u.email, '')   AS Email,
+            COUNT(n.id) FILTER (
+                WHERE etapa_atual.classificacao = 'aberta'
+            ) AS PosicoesEmAberto,
+            COUNT(n.id) FILTER (
+                WHERE etapa_atual.classificacao = 'fechada_positiva'
+            ) AS PosicoesRecuperadas,
+            COALESCE(
+                SUM(n.valor) FILTER (
+                    WHERE etapa_atual.classificacao = 'fechada_positiva'
+                      AND DATE_TRUNC(
+                            'month',
+                            COALESCE(ur.recuperado_em, n.updated_at) AT TIME ZONE 'America/Sao_Paulo'
+                          ) = DATE_TRUNC(
+                            'month',
+                            CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo'
+                          )
+                ),
+                0
+            ) AS RecuperadoNoMes
         FROM seguranca.usuario u
+        LEFT JOIN crm.negocio n
+            ON n.operador_id = u.id
+           AND n.ativo = true
+           AND n.deleted_at IS NULL
+        LEFT JOIN crm.negocio_etapa etapa_atual
+            ON etapa_atual.id = n.etapa_id
+        LEFT JOIN ultima_recuperacao ur
+            ON ur.negocio_id = n.id
         WHERE u.ativo = true
-          AND (
-               @busca = ''
-            OR u.nome     ILIKE '%' || @busca || '%'
-            OR u.username ILIKE '%' || @busca || '%'
-            OR u.email    ILIKE '%' || @busca || '%'
-          )
+        GROUP BY u.id, u.nome, u.username, u.email
         ORDER BY u.nome;
         """;
 
     /// <summary>
-    /// Retorna os usuários ativos do schema seguranca com filtro opcional.
+    /// Retorna os usuários ativos do schema seguranca com os indicadores do CRM.
     /// Somente leitura — o CRM nunca altera seguranca.*.
     /// </summary>
     public async Task<IReadOnlyList<UsuarioListaDto>> ListarUsuariosAsync(
-        string busca, CancellationToken ct = default)
+        CancellationToken ct = default)
     {
-        busca = (busca ?? string.Empty).Trim();
         await using var conn = new NpgsqlConnection(_connectionString);
         var rows = await conn.QueryAsync<UsuarioListaDto>(
-            new CommandDefinition(QueryListarUsuarios, new { busca }, cancellationToken: ct));
+            new CommandDefinition(QueryListarUsuarios, cancellationToken: ct));
         return rows.AsList();
     }
 

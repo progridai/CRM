@@ -1,34 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Briefcase, Search, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Briefcase, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { listarContatos, type ContatoDto } from '../../services/contatosService';
-import { listarUsuarios, obterPerfilLogado, type UsuarioDto } from '../../services/usuariosService';
+import { listarUsuarios, obterPerfilLogado, type UsuarioBasicoDto, type UsuarioDto } from '../../services/usuariosService';
 import { criarNegocio, type EtapaDto } from '../../services/negociosService';
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
-
-const MESES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-];
-
-function gerarAnos(): number[] {
-  const anoAtual = new Date().getFullYear();
-  const anos: number[] = [];
-  for (let a = anoAtual - 5; a <= anoAtual + 5; a++) anos.push(a);
-  return anos;
-}
-
-function formatarDocumento(doc: string): string {
-  if (!doc) return '';
-  const limpo = doc.replace(/\D/g, '');
-  if (limpo.length === 11) {
-    return limpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  }
-  if (limpo.length === 14) {
-    return limpo.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-  }
-  return doc;
-}
 
 function formatarMoedaInput(valor: string): string {
   // Remove tudo que não é dígito
@@ -68,7 +44,6 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
   onNegocioCriado,
 }) => {
   // ── Estados do formulário ──────────────────────────────────────────────────
-  const hoje = new Date();
   const [contatos, setContatos]                     = useState<ContatoDto[]>([]);
   const [clientePublicId, setClientePublicId]       = useState('');
 
@@ -76,13 +51,13 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
   const [referencia, setReferencia]         = useState('');
   const [competencia, setCompetencia]       = useState(getMesAtualFormatado());
   const [dataVencimento, setDataVencimento] = useState('');
-  const [origem, setOrigem]                 = useState('');
+  const [origem, setOrigem]                 = useState('Manual');
   const [etapaPublicId, setEtapaPublicId]   = useState('');
   const [operadorId, setOperadorId]         = useState<number | ''>('');
   const [notas, setNotas]                   = useState('');
 
   const [usuarios, setUsuarios]           = useState<UsuarioDto[]>([]);
-  const [usuarioLogado, setUsuarioLogado] = useState<UsuarioDto | null>(null);
+  const [usuarioLogado, setUsuarioLogado] = useState<UsuarioBasicoDto | null>(null);
   const [salvando, setSalvando]           = useState(false);
   const [erroGlobal, setErroGlobal] = useState<string | null>(null);
   const [sucesso, setSucesso]       = useState(false);
@@ -92,10 +67,6 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
   const [errValor, setErrValor]     = useState<string | null>(null);
   const [errCompetencia, setErrCompetencia] = useState<string | null>(null);
   const [errEtapa, setErrEtapa]     = useState<string | null>(null);
-
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const inputClienteRef = useRef<HTMLInputElement>(null);
 
   // ── Efeito: definir etapa default ao abrir ─────────────────────────────────
   useEffect(() => {
@@ -145,7 +116,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
     setReferencia('');
     setCompetencia(getMesAtualFormatado());
     setDataVencimento('');
-    setOrigem('');
+    setOrigem('Manual');
     setEtapaPublicId(etapas[0]?.publicId ?? '');
     setOperadorId(usuarioLogado?.usuarioId ?? '');
     setNotas('');
@@ -232,11 +203,8 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
   if (!isOpen) return null;
 
   const fieldCls = `w-full h-9 px-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-slate-400 font-medium`;
-  const readonlyCls = `w-full h-9 px-3 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-500 cursor-not-allowed select-none font-mono`;
   const labelCls = `text-xs font-semibold text-slate-700`;
   const errorCls = `text-[11px] text-rose-500 mt-0.5`;
-
-  const anos = gerarAnos();
 
   return (
     <div

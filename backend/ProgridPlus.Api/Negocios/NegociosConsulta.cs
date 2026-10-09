@@ -27,6 +27,16 @@ public sealed class NegociosConsulta
         """;
 
     private const string QueryNegocios = """
+        WITH ultima_recuperacao AS (
+            SELECT
+                h.negocio_id,
+                MAX(h.ocorrido_em) AS recuperado_em
+            FROM crm.negocio_historico h
+            INNER JOIN crm.negocio_etapa etapa_historico
+                ON etapa_historico.id = h.etapa_nova_id
+               AND etapa_historico.classificacao = 'fechada_positiva'
+            GROUP BY h.negocio_id
+        )
         SELECT
             n.public_id       AS PublicId,
             n.valor           AS Valor,
@@ -35,6 +45,13 @@ public sealed class NegociosConsulta
             n.competencia_ano AS CompetenciaAno,
             n.origem          AS Origem,
             n.data_vencimento AS DataVencimento,
+            CASE
+                WHEN e.classificacao = 'fechada_positiva'
+                    THEN COALESCE(ur.recuperado_em, n.updated_at)
+                ELSE NULL
+            END AS RecuperadoEm,
+            n.operador_id     AS OperadorId,
+            op.nome           AS NomeOperador,
             e.codigo          AS EtapaCodigo,
             p.nome            AS NomeCliente,
             p.documento_principal AS Documento,
@@ -56,6 +73,8 @@ public sealed class NegociosConsulta
         INNER JOIN crm.negocio_etapa e ON e.id = n.etapa_id
         INNER JOIN cadastro.cliente cl ON cl.id = n.cliente_id
         INNER JOIN core.pessoa p ON p.id = cl.pessoa_id
+        LEFT JOIN seguranca.usuario op ON op.id = n.operador_id
+        LEFT JOIN ultima_recuperacao ur ON ur.negocio_id = n.id
         WHERE n.ativo = true AND n.deleted_at IS NULL
         ORDER BY n.created_at DESC;
         """;
@@ -149,9 +168,12 @@ public sealed class NegocioListaDto
     public int CompetenciaAno { get; set; }
     public string? Origem { get; set; }
     public DateTime? DataVencimento { get; set; }
+    public DateTime? RecuperadoEm { get; set; }
     public string EtapaCodigo { get; set; } = string.Empty;
     public string NomeCliente { get; set; } = string.Empty;
     public string? Documento { get; set; }
     public string? TelefonePrincipal { get; set; }
+    public long? OperadorId { get; set; }
+    public string? NomeOperador { get; set; }
     public int AtividadesCount { get; set; }
 }

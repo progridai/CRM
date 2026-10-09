@@ -42,10 +42,13 @@ export interface NegocioDto {
   competenciaAno: number;
   origem?: string;
   dataVencimento?: string;
+  recuperadoEm?: string;
   etapaCodigo: string;
   nomeCliente: string;
   documento?: string;
   telefonePrincipal?: string;
+  operadorId?: number;
+  nomeOperador?: string;
   atividadesCount: number;
 }
 

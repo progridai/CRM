@@ -10,7 +10,12 @@ public sealed record ContatoDto(
     string Nome,
     string Documento,
     int    TipoPessoa,         // 1 = Física, 2 = Jurídica
-    string TelefonePrincipal
+    string TelefonePrincipal,
+    string Origem,
+    decimal TotalEmDebito,
+    string StatusGeral,
+    string StatusCodigo,
+    string? StatusCorHex
 );
 
 /// <summary>

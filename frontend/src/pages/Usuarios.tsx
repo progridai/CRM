@@ -7,9 +7,12 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  ArrowUpRight,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { listarUsuarios } from '../services/usuariosService';
-import type { UsuarioDto } from '../services/usuariosService';
+import type { UsuarioDto, UsuarioResumoDto } from '../services/usuariosService';
+import { formatCurrency } from '../utils';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,12 +41,18 @@ const DEBOUNCE_MS = 350;
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export const UsuariosPage: React.FC = () => {
+  const navigate = useNavigate();
   const [busca, setBusca]           = useState('');
   const [buscaInput, setBuscaInput] = useState('');
   const [usuarios, setUsuarios]     = useState<UsuarioDto[]>([]);
   const [total, setTotal]           = useState(0);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro]             = useState<string | null>(null);
+  const [resumo, setResumo] = useState<UsuarioResumoDto>({
+    posicoesEmAberto: 0,
+    posicoesRecuperadas: 0,
+    recuperadoNoMes: 0,
+  });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,6 +72,11 @@ export const UsuariosPage: React.FC = () => {
       const resultado = await listarUsuarios(busca);
       setUsuarios(resultado.itens);
       setTotal(resultado.total);
+      setResumo(resultado.resumo ?? {
+        posicoesEmAberto: 0,
+        posicoesRecuperadas: 0,
+        recuperadoNoMes: 0,
+      });
     } catch (err: any) {
       setErro(
         err?.response?.data?.message ??
@@ -119,7 +133,7 @@ export const UsuariosPage: React.FC = () => {
               Posições em aberto
             </span>
             <span className="font-display text-2xl font-extrabold text-amber-600 dark:text-amber-400">
-              0
+              {resumo.posicoesEmAberto}
             </span>
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5 font-medium">
               Em andamento
@@ -137,7 +151,7 @@ export const UsuariosPage: React.FC = () => {
               Posições recuperadas
             </span>
             <span className="font-display text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-              0
+              {resumo.posicoesRecuperadas}
             </span>
             <span className="text-[11px] text-emerald-600 dark:text-emerald-400 block mt-0.5 font-medium">
               Acordos quitados
@@ -155,7 +169,7 @@ export const UsuariosPage: React.FC = () => {
               Recuperado no mês
             </span>
             <span className="font-display text-xl font-extrabold text-indigo-600 dark:text-indigo-400">
-              R$ 0,00
+              {formatCurrency(resumo.recuperadoNoMes)}
             </span>
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5 font-medium">
               Volume conciliado
@@ -254,36 +268,44 @@ export const UsuariosPage: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Posições em aberto — zero por ora */}
+                        {/* Posições em aberto */}
                         <td className="p-4 text-center">
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold
                                            bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300
                                            border border-amber-200/80 dark:border-amber-800/80 shadow-2xs">
                             <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                            <span>0</span>
+                            <span>{u.posicoesEmAberto ?? 0}</span>
                           </span>
                         </td>
 
-                        {/* Posições recuperadas — zero por ora */}
+                        {/* Posições recuperadas */}
                         <td className="p-4 text-center">
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold
                                            bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300
                                            border border-emerald-200/80 dark:border-emerald-800/80 shadow-2xs">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                            <span>0</span>
+                            <span>{u.posicoesRecuperadas ?? 0}</span>
                           </span>
                         </td>
 
-                        {/* Recuperado no mês — zero por ora */}
+                        {/* Recuperado no mês */}
                         <td className="p-4 text-right">
                           <span className="font-display font-bold text-sm text-slate-900 dark:text-slate-100">
-                            R$ 0,00
+                            {formatCurrency(u.recuperadoNoMes ?? 0)}
                           </span>
                         </td>
 
-                        {/* Ações — desabilitado por ora */}
+                        {/* Ações */}
                         <td className="p-4 text-center">
-                          <span className="text-slate-300 dark:text-slate-700 text-xs">—</span>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/negocios?operador=${encodeURIComponent(u.nome)}`)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-semibold text-xs transition-colors cursor-pointer"
+                            title={`Filtrar negócios de ${u.nome}`}
+                          >
+                            <span>Ver Negócios</span>
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );

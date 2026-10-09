@@ -7,6 +7,11 @@ export interface ContatoDto {
   documento: string;
   tipoPessoa: number;     // 1 = Física, 2 = Jurídica
   telefonePrincipal: string;
+  origem: string;
+  totalEmDebito: number;
+  statusGeral: string;
+  statusCodigo: string;
+  statusCorHex?: string;
 }
 
 export interface ContatosPaginadosDto {

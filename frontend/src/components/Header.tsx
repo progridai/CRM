@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, LogOut, Moon, Sun, ChevronDown } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
+import { CommandPalette } from './CommandPalette';
 
 interface HeaderProps {
   isDarkMode: boolean;
@@ -10,6 +11,19 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ isDarkMode, onToggleDarkMode }) => {
   const { user, logout } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase('pt-BR') === 'k') {
+        event.preventDefault();
+        setIsCommandPaletteOpen((current) => !current);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Gera as iniciais do nome do usuário para o avatar
   const initials = (user?.name ?? '?')
@@ -27,17 +41,23 @@ export const Header: React.FC<HeaderProps> = ({ isDarkMode, onToggleDarkMode }) 
                  flex items-center justify-between px-6
                  transition-colors duration-200"
     >
-      {/* ── Barra de Busca Global (decorativa por ora) ── */}
+      {/* ── Barra de Busca Global ── */}
       <div className="flex items-center w-80 sm:w-96 md:w-[440px]">
-        <div className="flex items-center w-full gap-2 px-3 py-1.5 rounded-lg
-                        bg-slate-100/90 dark:bg-slate-800/80
+        <button
+          type="button"
+          onClick={() => {
+            setShowProfileMenu(false);
+            setIsCommandPaletteOpen(true);
+          }}
+          className="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-left
+                        bg-slate-100/90 hover:bg-slate-200/70 dark:bg-slate-800/80 dark:hover:bg-slate-800
                         border border-slate-200/60 dark:border-slate-700
-                        text-slate-500 dark:text-slate-400">
-          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
-          <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">
+                        text-slate-500 dark:text-slate-400 transition-all">
+          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0" />
+          <span className="w-full truncate text-xs text-slate-400 dark:text-slate-500 font-normal">
             Buscar contato, documento ou telefone…
           </span>
-        </div>
+        </button>
       </div>
 
       {/* ── Ações à Direita ── */}
@@ -127,6 +147,10 @@ export const Header: React.FC<HeaderProps> = ({ isDarkMode, onToggleDarkMode }) 
           )}
         </div>
       </div>
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
     </header>
   );
 };
