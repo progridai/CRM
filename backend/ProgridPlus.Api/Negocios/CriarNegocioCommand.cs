@@ -18,6 +18,12 @@ public sealed record CriarNegocioCommand(
     /// <summary>Data de Vencimento da fatura.</summary>
     DateTime DataVencimento,
 
+    /// <summary>Mês de competência.</summary>
+    int CompetenciaMes,
+
+    /// <summary>Ano de competência.</summary>
+    int CompetenciaAno,
+
     /// <summary>Texto livre de origem do negócio. Opcional.</summary>
     string? Origem,
 

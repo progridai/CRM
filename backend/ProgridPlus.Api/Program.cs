@@ -53,11 +53,11 @@ builder.Services.AddScoped<ContatosConsulta>();
 
 // NegociosConsulta: executa queries de leitura no schema crm.
 builder.Services.AddScoped<ProgridPlus.Api.Negocios.NegociosConsulta>();
+builder.Services.AddScoped<ProgridPlus.Api.Negocios.AtividadeAtalhosConsulta>();
 
 // NegocioComando: serviço de escrita no schema crm (criação de negócios).
 builder.Services.AddScoped<ProgridPlus.Api.Negocios.NegocioComando>();
-
-
+builder.Services.AddScoped<ProgridPlus.Api.Negocios.AtividadeAtalhoComando>();
 // Authentication via Keycloak JWT Bearer
 var authority = builder.Configuration.GetValue<string>("Authentication:Authority")
     ?? throw new InvalidOperationException("Missing Authentication:Authority");

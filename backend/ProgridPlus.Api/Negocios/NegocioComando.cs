@@ -76,7 +76,7 @@ public sealed class NegocioComando
             @origem,
             @notas
         )
-        RETURNING id, public_id;
+        RETURNING id AS Id, public_id AS PublicId;
         """;
 
     private const string QueryInserirHistorico = """
@@ -93,6 +93,54 @@ public sealed class NegocioComando
             'criado',
             @descricao,
             @etapaId
+        );
+        """;
+
+    private const string QueryResolverNegocio = """
+        SELECT
+            id          AS Id,
+            public_id   AS PublicId,
+            etapa_id    AS EtapaId
+        FROM crm.negocio
+        WHERE public_id = @negocioPublicId
+          AND ativo = true
+          AND deleted_at IS NULL
+        LIMIT 1;
+        """;
+
+    private const string QueryResolverEtapaPorId = """
+        SELECT
+            id      AS Id,
+            nome    AS Nome,
+            codigo  AS Codigo
+        FROM crm.negocio_etapa
+        WHERE id = @id
+        LIMIT 1;
+        """;
+
+    private const string QueryAtualizarEtapaNegocio = """
+        UPDATE crm.negocio
+        SET etapa_id = @novaEtapaId,
+            updated_at = now()
+        WHERE id = @negocioId;
+        """;
+
+    private const string QueryInserirHistoricoMudancaEtapa = """
+        INSERT INTO crm.negocio_historico (
+            negocio_id,
+            usuario_id,
+            tipo_evento,
+            descricao,
+            etapa_anterior_id,
+            etapa_nova_id
+        )
+        VALUES (
+            @negocioId,
+            @usuarioId,
+            'mudanca_etapa',
+            @descricao,
+            @etapaAnteriorId,
+            @novaEtapaId
         );
         """;
 
@@ -119,6 +167,12 @@ public sealed class NegocioComando
 
         if (cmd.DataVencimento.Year is < 2000 or > 2100)
             throw new ArgumentException("Data de Vencimento inválida.", nameof(cmd.DataVencimento));
+
+        if (cmd.CompetenciaAno is < 2000 or > 2100)
+            throw new ArgumentException("Ano de Competência inválido.", nameof(cmd.CompetenciaAno));
+
+        if (cmd.CompetenciaMes is < 1 or > 12)
+            throw new ArgumentException("Mês de Competência inválido.", nameof(cmd.CompetenciaMes));
 
         if (cmd.Origem is not null && cmd.Origem.Length > 150)
             throw new ArgumentException("Origem não pode exceder 150 caracteres.", nameof(cmd.Origem));
@@ -160,8 +214,8 @@ public sealed class NegocioComando
                     $"Etapa não encontrada ou inativa: {cmd.EtapaPublicId}.");
 
             // ── 3. Inserir negócio ─────────────────────────────────────────────
-            var competenciaMes = cmd.DataVencimento.Month;
-            var competenciaAno = cmd.DataVencimento.Year;
+            var competenciaMes = cmd.CompetenciaMes;
+            var competenciaAno = cmd.CompetenciaAno;
             var competenciaInt = competenciaAno * 100 + competenciaMes;
 
             var negocioRow = await conn.QuerySingleAsync<NegocioRow>(
@@ -192,7 +246,7 @@ public sealed class NegocioComando
                     {
                         negocioId = negocioRow.Id,
                         usuarioId = usuarioLogadoId,
-                        descricao = $"Negocio criado na etapa '{etapaRow.Nome}'.",
+                        descricao = $"Negócio criado na etapa \"{etapaRow.Nome}\".",
                         etapaId   = etapaRow.Id
                     },
                     transaction: tx,
@@ -220,6 +274,173 @@ public sealed class NegocioComando
         }
     }
 
+    /// <summary>
+    /// Altera a etapa de um negócio no Kanban e registra a mudança no histórico.
+    /// </summary>
+    public async Task MoverEtapaAsync(
+        Guid negocioPublicId,
+        Guid novaEtapaPublicId,
+        long usuarioLogadoId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            // 1. Resolver Negócio
+            var negocio = await conn.QuerySingleOrDefaultAsync<NegocioBaseRow>(
+                new CommandDefinition(
+                    QueryResolverNegocio,
+                    new { negocioPublicId },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+            if (negocio is null)
+                throw new InvalidOperationException($"Negócio não encontrado ou inativo: {negocioPublicId}.");
+
+            // 2. Resolver Nova Etapa
+            var novaEtapa = await conn.QuerySingleOrDefaultAsync<EtapaRow>(
+                new CommandDefinition(
+                    QueryResolverEtapa,
+                    new { publicId = novaEtapaPublicId },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+            if (novaEtapa is null)
+                throw new InvalidOperationException($"Etapa destino não encontrada ou inativa: {novaEtapaPublicId}.");
+
+            if (negocio.EtapaId == novaEtapa.Id)
+            {
+                // Já está na mesma etapa, não faz nada
+                await tx.RollbackAsync(ct);
+                return;
+            }
+
+            // Opcional: resolver etapa anterior para montar a descrição
+            var etapaAnterior = await conn.QuerySingleOrDefaultAsync<EtapaRow>(
+                new CommandDefinition(
+                    QueryResolverEtapaPorId,
+                    new { id = negocio.EtapaId },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+            var nomeAnterior = etapaAnterior?.Nome ?? "Desconhecida";
+
+            // 3. Atualizar etapa do negócio
+            await conn.ExecuteAsync(
+                new CommandDefinition(
+                    QueryAtualizarEtapaNegocio,
+                    new { novaEtapaId = novaEtapa.Id, negocioId = negocio.Id },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+            // 4. Inserir histórico
+            await conn.ExecuteAsync(
+                new CommandDefinition(
+                    QueryInserirHistoricoMudancaEtapa,
+                    new
+                    {
+                        negocioId = negocio.Id,
+                        usuarioId = usuarioLogadoId,
+                        descricao = $"Movido de \"{nomeAnterior}\" para \"{novaEtapa.Nome}\".",
+                        etapaAnteriorId = negocio.EtapaId,
+                        novaEtapaId = novaEtapa.Id
+                    },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+            await tx.CommitAsync(ct);
+
+            _logger.LogInformation(
+                "Negócio {PublicId} movido da etapa {Antiga} para {Nova} pelo usuário {Usuario}.",
+                negocioPublicId, negocio.EtapaId, novaEtapa.Id, usuarioLogadoId);
+        }
+        catch
+        {
+            await tx.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+    }
+
+    private const string QueryInserirAtividade = """
+        INSERT INTO crm.atividade (
+            negocio_id,
+            usuario_id,
+            tipo,
+            titulo,
+            descricao
+        )
+        VALUES (
+            @negocioId,
+            @usuarioId,
+            @tipo,
+            @titulo,
+            @descricao
+        )
+        RETURNING public_id AS PublicId, tipo AS Tipo, titulo AS Titulo, descricao AS Descricao, ocorrido_em AS OcorridoEm;
+        """;
+
+    public async Task<AtividadeDto> RegistrarAtividadeAsync(
+        Guid negocioPublicId,
+        RegistrarAtividadeCommand cmd,
+        long usuarioLogadoId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(cmd.Tipo) || string.IsNullOrWhiteSpace(cmd.Titulo))
+            throw new ArgumentException("Tipo e Título são obrigatórios.");
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            var negocio = await conn.QuerySingleOrDefaultAsync<NegocioBaseRow>(
+                new CommandDefinition(QueryResolverNegocio, new { negocioPublicId }, transaction: tx, cancellationToken: ct));
+
+            if (negocio is null)
+                throw new InvalidOperationException($"Negócio não encontrado: {negocioPublicId}");
+
+            var usuarioNome = await conn.QuerySingleOrDefaultAsync<string>(
+                new CommandDefinition(
+                    "SELECT u.nome FROM seguranca.usuario u WHERE u.id = @id",
+                    new { id = usuarioLogadoId }, transaction: tx, cancellationToken: ct)) ?? "Sistema";
+
+            var atividadeRow = await conn.QuerySingleAsync<AtividadeRow>(
+                new CommandDefinition(
+                    QueryInserirAtividade,
+                    new
+                    {
+                        negocioId = negocio.Id,
+                        usuarioId = usuarioLogadoId,
+                        tipo = cmd.Tipo,
+                        titulo = cmd.Titulo,
+                        descricao = cmd.Descricao
+                    },
+                    transaction: tx,
+                    cancellationToken: ct));
+
+            await tx.CommitAsync(ct);
+
+            return new AtividadeDto(
+                PublicId: atividadeRow.PublicId,
+                Tipo: atividadeRow.Tipo,
+                Titulo: atividadeRow.Titulo,
+                Descricao: atividadeRow.Descricao,
+                OcorridoEm: atividadeRow.OcorridoEm,
+                NomeUsuario: usuarioNome,
+                NegocioPublicId: negocioPublicId
+            );
+        }
+        catch
+        {
+            await tx.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+    }
+
     // ─── Mapeamento interno ─────────────────────────────────────────────────────
 
     private sealed class ClienteRow
@@ -239,5 +460,21 @@ public sealed class NegocioComando
     {
         public long Id       { get; init; }
         public Guid PublicId { get; init; }
+    }
+
+    private sealed class NegocioBaseRow
+    {
+        public long Id { get; init; }
+        public Guid PublicId { get; init; }
+        public long EtapaId { get; init; }
+    }
+
+    private sealed class AtividadeRow
+    {
+        public Guid PublicId { get; init; }
+        public string Tipo { get; init; } = string.Empty;
+        public string Titulo { get; init; } = string.Empty;
+        public string? Descricao { get; init; }
+        public DateTime OcorridoEm { get; init; }
     }
 }

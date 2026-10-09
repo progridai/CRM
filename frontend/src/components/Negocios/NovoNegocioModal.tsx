@@ -43,6 +43,13 @@ function parseMoeda(valor: string): number {
   return parseFloat(limpo) || 0;
 }
 
+function getMesAtualFormatado(): string {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
+  return `${ano}-${mes}`;
+}
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface NovoNegocioModalProps {
@@ -67,6 +74,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
 
   const [valorStr, setValorStr]             = useState('');
   const [referencia, setReferencia]         = useState('');
+  const [competencia, setCompetencia]       = useState(getMesAtualFormatado());
   const [dataVencimento, setDataVencimento] = useState('');
   const [origem, setOrigem]                 = useState('');
   const [etapaPublicId, setEtapaPublicId]   = useState('');
@@ -82,6 +90,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
   // Erros individuais
   const [errCliente, setErrCliente] = useState<string | null>(null);
   const [errValor, setErrValor]     = useState<string | null>(null);
+  const [errCompetencia, setErrCompetencia] = useState<string | null>(null);
   const [errEtapa, setErrEtapa]     = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -134,6 +143,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
     setClientePublicId(contatos[0]?.clientePublicId ?? '');
     setValorStr('');
     setReferencia('');
+    setCompetencia(getMesAtualFormatado());
     setDataVencimento('');
     setOrigem('');
     setEtapaPublicId(etapas[0]?.publicId ?? '');
@@ -143,6 +153,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
     setSucesso(false);
     setErrCliente(null);
     setErrValor(null);
+    setErrCompetencia(null);
     setErrEtapa(null);
   };
 
@@ -169,6 +180,11 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
       valido = false;
     }
 
+    if (!competencia) {
+      setErrCompetencia('Informe a competência.');
+      valido = false;
+    }
+
     if (!etapaPublicId) {
       setErrEtapa('Selecione a etapa inicial.');
       valido = false;
@@ -179,12 +195,18 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
     setSalvando(true);
     setErroGlobal(null);
 
+    const [compAnoStr, compMesStr] = competencia.split('-');
+    const competenciaAno = parseInt(compAnoStr, 10);
+    const competenciaMes = parseInt(compMesStr, 10);
+
     try {
       await criarNegocio({
         clientePublicId,
         valor,
         referencia:    referencia.trim() || undefined,
         dataVencimento: dataVencimento || new Date().toISOString().split('T')[0],
+        competenciaMes,
+        competenciaAno,
         origem:        origem.trim() || undefined,
         etapaPublicId,
         operadorId:    operadorId !== '' ? operadorId : undefined,
@@ -302,8 +324,23 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
             </div>
           </div>
 
-          {/* 6+7. Competência + Etapa Inicial */}
+          {/* 6. Competência + Vencimento */}
           <div className="grid grid-cols-2 gap-3">
+            {/* Data de Competência */}
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>
+                Data de Competência <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="month"
+                required
+                value={competencia}
+                onChange={e => { setCompetencia(e.target.value); setErrCompetencia(null); }}
+                className={`${fieldCls} cursor-pointer ${errCompetencia ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-100' : ''}`}
+              />
+              {errCompetencia && <p className={errorCls}>{errCompetencia}</p>}
+            </div>
+
             {/* Data de Vencimento */}
             <div className="flex flex-col gap-1">
               <label className={labelCls}>
@@ -317,8 +354,10 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
                 className={`${fieldCls} cursor-pointer`}
               />
             </div>
+          </div>
 
-            {/* Etapa Inicial */}
+          {/* 7. Etapa Inicial + Responsável */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className={labelCls}>
                 Etapa Inicial <span className="text-rose-500">*</span>
@@ -334,21 +373,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
               </select>
               {errEtapa && <p className={errorCls}>{errEtapa}</p>}
             </div>
-          </div>
 
-          {/* 8+9. Origem + Responsável */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className={labelCls}>Origem</label>
-              <input
-                type="text"
-                placeholder="Ex: FAEC, Indicação..."
-                value={origem}
-                maxLength={150}
-                onChange={e => setOrigem(e.target.value)}
-                className={fieldCls}
-              />
-            </div>
             <div className="flex flex-col gap-1">
               <label className={labelCls}>Responsável</label>
               <select
@@ -361,6 +386,19 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* 8. Origem */}
+          <div className="flex flex-col gap-1">
+            <label className={labelCls}>Origem</label>
+            <input
+              type="text"
+              placeholder="Ex: FAEC, Indicação..."
+              value={origem}
+              maxLength={150}
+              onChange={e => setOrigem(e.target.value)}
+              className={fieldCls}
+            />
           </div>
 
           {/* 10. Observações */}
