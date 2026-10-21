@@ -5,8 +5,7 @@ namespace ProgridPlus.Api.Negocios;
 
 /// <summary>
 /// Serviço de escrita do módulo Negócios.
-/// Toda mutação de crm.negocio passa por aqui.
-/// O CRM nunca insere em seguranca.* nem em cadastro.*/core.*.
+/// Toda mutação de crm.negocio passa por aqui; este serviço escreve somente no schema crm.
 /// </summary>
 public sealed class NegocioComando
 {

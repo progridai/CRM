@@ -59,9 +59,16 @@ public sealed class NegociosConsulta
                 SELECT pc.valor 
                 FROM core.pessoa_contato pc 
                 WHERE pc.pessoa_id = cl.pessoa_id 
-                  AND pc.tipo_contato = 'telefone' 
-                  AND pc.principal = true 
+                  AND UPPER(pc.tipo_contato) IN ('CELULAR', 'TELEFONE')
                   AND pc.ativo = true 
+                  AND NULLIF(BTRIM(pc.valor), '') IS NOT NULL
+                ORDER BY
+                  pc.principal DESC,
+                  CASE UPPER(pc.tipo_contato)
+                    WHEN 'CELULAR' THEN 0
+                    ELSE 1
+                  END,
+                  pc.id
                 LIMIT 1
             ) AS TelefonePrincipal,
             (

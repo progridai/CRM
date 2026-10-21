@@ -5,8 +5,7 @@ using ProgridPlus.Api.Contatos;
 namespace ProgridPlus.Api.Controllers;
 
 /// <summary>
-/// Listagem de contatos (pessoas) lida do schema core (somente leitura).
-/// O CRM não cria tabela própria de contatos nesta fase.
+/// Consulta contatos e mantém os telefones compartilhados com o WebAPolice.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -14,10 +13,17 @@ namespace ProgridPlus.Api.Controllers;
 public class ContatosController : ControllerBase
 {
     private readonly ContatosConsulta _consulta;
+    private readonly ContatoTelefoneComando _telefoneComando;
+    private readonly ILogger<ContatosController> _logger;
 
-    public ContatosController(ContatosConsulta consulta)
+    public ContatosController(
+        ContatosConsulta consulta,
+        ContatoTelefoneComando telefoneComando,
+        ILogger<ContatosController> logger)
     {
         _consulta = consulta;
+        _telefoneComando = telefoneComando;
+        _logger = logger;
     }
 
     /// <summary>
@@ -35,5 +41,45 @@ public class ContatosController : ControllerBase
     {
         var resultado = await _consulta.ListarAsync(busca, pagina, tamanhoPagina, ct);
         return Ok(resultado);
+    }
+
+    /// <summary>Busca compacta para seletores de contato, sem contagem total.</summary>
+    [HttpGet("busca")]
+    public async Task<IActionResult> Buscar(
+        [FromQuery] string termo,
+        [FromQuery] int limite = 8,
+        CancellationToken ct = default)
+    {
+        var resultado = await _consulta.BuscarAsync(termo, limite, ct);
+        return Ok(resultado);
+    }
+
+    [HttpPut("{pessoaId:long}/telefones")]
+    public async Task<IActionResult> AtualizarTelefones(
+        long pessoaId,
+        [FromBody] AtualizarTelefonesRequest request,
+        CancellationToken ct = default)
+    {
+        if (HttpContext.Items["UsuarioId"] is not long usuarioId)
+        {
+            _logger.LogWarning(
+                "PUT /api/contatos/{PessoaId}/telefones: UsuarioId ausente no contexto.",
+                pessoaId);
+            return Unauthorized(new { message = "Usuário não identificado." });
+        }
+
+        try
+        {
+            await _telefoneComando.AtualizarAsync(pessoaId, request, usuarioId, ct);
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 }

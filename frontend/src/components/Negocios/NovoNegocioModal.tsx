@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Briefcase, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { listarContatos, type ContatoDto } from '../../services/contatosService';
+import type { ContatoDto } from '../../services/contatosService';
 import { listarUsuarios, obterPerfilLogado, type UsuarioBasicoDto, type UsuarioDto } from '../../services/usuariosService';
 import { criarNegocio, type EtapaDto } from '../../services/negociosService';
+import { ContatoAutocomplete } from './ContatoAutocomplete';
 
 // ─── Utilitários ─────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
   onNegocioCriado,
 }) => {
   // ── Estados do formulário ──────────────────────────────────────────────────
-  const [contatos, setContatos]                     = useState<ContatoDto[]>([]);
+  const [contatoSelecionado, setContatoSelecionado] = useState<ContatoDto | null>(null);
   const [clientePublicId, setClientePublicId]       = useState('');
 
   const [valorStr, setValorStr]             = useState('');
@@ -90,14 +91,6 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
       setOperadorId(usuarioLogado.usuarioId);
     }
 
-    // Carregar contatos para o combo
-    listarContatos('', 1, 100).then(r => {
-        setContatos(r.itens);
-        if (r.itens.length > 0 && !clientePublicId) {
-            setClientePublicId(r.itens[0].clientePublicId);
-        }
-    }).catch(() => {});
-
   }, [isOpen, usuarioLogado]);
 
 
@@ -111,7 +104,8 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
 
   // ── Reset ──────────────────────────────────────────────────────────────────
   const resetForm = () => {
-    setClientePublicId(contatos[0]?.clientePublicId ?? '');
+    setContatoSelecionado(null);
+    setClientePublicId('');
     setValorStr('');
     setReferencia('');
     setCompetencia(getMesAtualFormatado());
@@ -245,21 +239,20 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
         {/* ── Form ──────────────────────────────────────────────────────── */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-6">
 
-          {/* 1. Contato — Combo Box (largura total) */}
+          {/* 1. Contato — busca remota por nome, documento ou telefone */}
           <div className="flex flex-col gap-1">
             <label className={labelCls}>
               Contato <span className="text-rose-500">*</span>
             </label>
-            <select
-                value={clientePublicId}
-                onChange={e => { setClientePublicId(e.target.value); setErrCliente(null); }}
-                className={`w-full h-9 px-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800 outline-none focus:bg-white focus:border-indigo-500 font-medium cursor-pointer ${errCliente ? 'border-rose-400' : ''}`}
-              >
-                {contatos.length === 0 && <option value="">Carregando contatos...</option>}
-                {contatos.map(c => (
-                  <option key={c.clientePublicId} value={c.clientePublicId}>{c.nome}</option>
-                ))}
-            </select>
+            <ContatoAutocomplete
+              value={contatoSelecionado}
+              hasError={Boolean(errCliente)}
+              onChange={(contato) => {
+                setContatoSelecionado(contato);
+                setClientePublicId(contato?.clientePublicId ?? '');
+                setErrCliente(null);
+              }}
+            />
             {errCliente && <p className={errorCls}>{errCliente}</p>}
           </div>
 

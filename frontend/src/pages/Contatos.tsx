@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, User, Phone, FileText, Loader2, AlertCircle, RefreshCw, MessageCircle } from 'lucide-react';
+import { Search, User, Phone, FileText, Loader2, AlertCircle, RefreshCw, MessageCircle, ExternalLink, Pencil, Plus } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { listarContatos } from '../services/contatosService';
 import type { ContatoDto } from '../services/contatosService';
 import { formatCurrency } from '../utils';
+import { GerenciarTelefonesModal } from '../components/Contatos/GerenciarTelefonesModal';
+import { getWebApoliceClienteUrl } from '../config/webApolice';
 
 // ─── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -75,6 +77,7 @@ export const ContatosPage: React.FC = () => {
   const [pagina, setPagina]         = useState(1);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro]             = useState<string | null>(null);
+  const [contatoEmEdicao, setContatoEmEdicao] = useState<ContatoDto | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -200,13 +203,13 @@ export const ContatosPage: React.FC = () => {
                 <th className="p-3.5">
                   <div className="flex items-center gap-1.5">
                     <Phone className="w-3 h-3" />
-                    Telefone Principal
+                    Telefones
                   </div>
                 </th>
                 <th className="p-3.5">Origem</th>
                 <th className="p-3.5">Status Geral</th>
                 <th className="p-3.5">Total em Débito</th>
-                <th className="p-3.5 text-right pr-4">Ação Direta</th>
+                <th className="p-3.5 text-left w-64">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -221,7 +224,11 @@ export const ContatosPage: React.FC = () => {
               ) : (
                 contatos.map((c) => {
                   const statusColor = c.statusCorHex || '#6366f1';
-                  const telefoneDigits = c.telefonePrincipal?.replace(/\D/g, '') ?? '';
+                  const telefones = c.telefones?.length
+                    ? c.telefones.map((telefone) => telefone.valor)
+                    : (c.telefonePrincipal ? [c.telefonePrincipal] : []);
+                  const telefonePrincipal = telefones[0] ?? '';
+                  const telefoneDigits = telefonePrincipal.replace(/\D/g, '');
                   const whatsappHabilitado = telefoneDigits.length >= 10;
 
                   return (
@@ -230,7 +237,7 @@ export const ContatosPage: React.FC = () => {
                     <td className="p-3.5 pl-4 font-semibold text-slate-900 dark:text-slate-100 max-w-xs">
                       <span className="truncate block">{formatNome(c.nome)}</span>
                       {/* Badge tipo pessoa */}
-                      <span className={`inline-block mt-0.5 text-[9px] font-medium px-1.5 py-px rounded-full ${
+                      <span className={`block w-fit mt-0.5 text-[9px] font-medium px-1.5 py-px rounded-full ${
                         c.tipoPessoa === 2
                           ? 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300'
                           : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
@@ -240,14 +247,40 @@ export const ContatosPage: React.FC = () => {
                     </td>
 
                     {/* Documento */}
-                    <td className="p-3.5 font-mono text-slate-600 dark:text-slate-400 text-[11px] whitespace-nowrap">
+                    <td className="p-3.5 font-mono text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
                       {formatDocumento(c.documento, c.tipoPessoa)}
                     </td>
 
                     {/* Telefone */}
                     <td className="p-3.5 text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                      {c.telefonePrincipal ? formatTelefone(c.telefonePrincipal) : (
-                        <span className="text-slate-300 dark:text-slate-600 italic">—</span>
+                      {telefones.length ? (
+                        <button
+                          type="button"
+                          onClick={() => setContatoEmEdicao(c)}
+                          className="group flex items-start gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+                          title="Editar telefones"
+                        >
+                          <div className="flex flex-col gap-1">
+                            {telefones.map((telefone, index) => (
+                              <span
+                                key={`${telefone}-${index}`}
+                                className={index === 0 ? 'font-semibold text-slate-700 dark:text-slate-200' : 'text-[11px] text-slate-500 dark:text-slate-400'}
+                              >
+                                {formatTelefone(telefone)}
+                              </span>
+                            ))}
+                          </div>
+                          <Pencil className="mt-0.5 h-3.5 w-3.5 text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setContatoEmEdicao(c)}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-indigo-500 transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Adicionar
+                        </button>
                       )}
                     </td>
 
@@ -279,28 +312,42 @@ export const ContatosPage: React.FC = () => {
                       {formatCurrency(c.totalEmDebito ?? 0)}
                     </td>
 
-                    {/* WhatsApp habilitado somente quando existe telefone válido */}
-                    <td className="p-3.5 pr-4 text-right">
-                      {whatsappHabilitado ? (
+                    {/* Ações externas */}
+                    <td className="p-3.5">
+                      <div className="flex flex-wrap items-center justify-start gap-2">
                         <a
-                          href={getWhatsAppLink(c.telefonePrincipal)}
+                          href={getWebApoliceClienteUrl(c.clientePublicId)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#20bd5a]"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-slate-700 dark:text-indigo-400 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/50"
+                          title={`Abrir cadastro de ${formatNome(c.nome)} no WebApólice`}
                         >
-                          <MessageCircle className="w-3.5 h-3.5 fill-white/20" strokeWidth={2.2} />
-                          WhatsApp
+                          <span>Ver Cadastro</span>
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                         </a>
-                      ) : (
-                        <span
-                          aria-disabled="true"
-                          title="Telefone não cadastrado"
-                          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-400 dark:bg-slate-800 dark:text-slate-600"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.2} />
-                          WhatsApp
-                        </span>
-                      )}
+
+                        {/* WhatsApp habilitado somente quando existe telefone válido */}
+                        {whatsappHabilitado ? (
+                          <a
+                            href={getWhatsAppLink(telefonePrincipal)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-[#20bd5a]"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 fill-white/20" strokeWidth={2.2} />
+                            WhatsApp
+                          </a>
+                        ) : (
+                          <span
+                            aria-disabled="true"
+                            title="Telefone não cadastrado"
+                            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-400 dark:bg-slate-800 dark:text-slate-600"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.2} />
+                            WhatsApp
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   );
@@ -348,6 +395,12 @@ export const ContatosPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <GerenciarTelefonesModal
+        contato={contatoEmEdicao}
+        onClose={() => setContatoEmEdicao(null)}
+        onSaved={carregar}
+      />
     </div>
   );
 };

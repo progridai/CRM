@@ -72,6 +72,7 @@ public sealed class SegurancaConsulta
         )
         SELECT
             u.id                    AS UsuarioId,
+            u.public_id             AS UsuarioPublicId,
             COALESCE(u.nome, '')    AS Nome,
             COALESCE(u.username, '') AS Username,
             COALESCE(u.email, '')   AS Email,
@@ -104,7 +105,7 @@ public sealed class SegurancaConsulta
         LEFT JOIN ultima_recuperacao ur
             ON ur.negocio_id = n.id
         WHERE u.ativo = true
-        GROUP BY u.id, u.nome, u.username, u.email
+        GROUP BY u.id, u.public_id, u.nome, u.username, u.email
         ORDER BY u.nome;
         """;
 

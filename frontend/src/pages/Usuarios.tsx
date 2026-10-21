@@ -8,11 +8,14 @@ import {
   AlertCircle,
   RefreshCw,
   ArrowUpRight,
+  ExternalLink,
+  UserPlus,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { listarUsuarios } from '../services/usuariosService';
 import type { UsuarioDto, UsuarioResumoDto } from '../services/usuariosService';
 import { formatCurrency } from '../utils';
+import { getWebApoliceNovoUsuarioUrl, getWebApoliceUsuarioUrl } from '../config/webApolice';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,22 +108,36 @@ export const UsuariosPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Busca */}
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5 pointer-events-none" />
-          <input
-            id="input-busca-usuarios"
-            type="text"
-            placeholder="Buscar por nome, username ou e-mail…"
-            value={buscaInput}
-            onChange={handleBuscaChange}
-            className="w-full h-9 pl-9 pr-3 rounded-xl
-                       bg-white dark:bg-slate-900
-                       border border-slate-200 dark:border-slate-700
-                       text-xs text-slate-800 dark:text-slate-100
-                       placeholder:text-slate-400 dark:placeholder:text-slate-500
-                       outline-none focus:border-indigo-500 shadow-2xs transition-colors"
-          />
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          {/* Busca */}
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5 pointer-events-none" />
+            <input
+              id="input-busca-usuarios"
+              type="text"
+              placeholder="Buscar por nome, username ou e-mail…"
+              value={buscaInput}
+              onChange={handleBuscaChange}
+              className="w-full h-9 pl-9 pr-3 rounded-xl
+                         bg-white dark:bg-slate-900
+                         border border-slate-200 dark:border-slate-700
+                         text-xs text-slate-800 dark:text-slate-100
+                         placeholder:text-slate-400 dark:placeholder:text-slate-500
+                         outline-none focus:border-indigo-500 shadow-2xs transition-colors"
+            />
+          </div>
+
+          <a
+            href={getWebApoliceNovoUsuarioUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            title="Cadastrar novo usuário no WebApólice"
+          >
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            <span>Novo usuário</span>
+            <ExternalLink className="h-3.5 w-3.5 opacity-75" aria-hidden="true" />
+          </a>
         </div>
       </div>
 
@@ -229,7 +246,7 @@ export const UsuariosPage: React.FC = () => {
                   <th className="p-4 text-center">Posições em aberto</th>
                   <th className="p-4 text-center">Posições recuperadas</th>
                   <th className="p-4 text-right">Recuperado no mês</th>
-                  <th className="p-4 text-center w-32">Ações</th>
+                  <th className="p-4 text-center w-64">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -297,15 +314,38 @@ export const UsuariosPage: React.FC = () => {
 
                         {/* Ações */}
                         <td className="p-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/negocios?operador=${encodeURIComponent(u.nome)}`)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-semibold text-xs transition-colors cursor-pointer"
-                            title={`Filtrar negócios de ${u.nome}`}
-                          >
-                            <span>Ver Negócios</span>
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            {u.usuarioPublicId ? (
+                              <a
+                                href={getWebApoliceUsuarioUrl(u.usuarioPublicId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-semibold text-xs transition-colors"
+                                title={`Abrir cadastro de ${u.nome || u.username} no WebApólice`}
+                              >
+                                <span>Ver Cadastro</span>
+                                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                              </a>
+                            ) : (
+                              <span
+                                aria-disabled="true"
+                                className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-400 dark:border-slate-700 dark:text-slate-600"
+                                title="Recarregue a página após reiniciar a API do Progrid+"
+                              >
+                                <span>Ver Cadastro</span>
+                                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/negocios?operador=${encodeURIComponent(u.nome)}`)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-semibold text-xs transition-colors cursor-pointer"
+                              title={`Filtrar negócios de ${u.nome}`}
+                            >
+                              <span>Ver Negócios</span>
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

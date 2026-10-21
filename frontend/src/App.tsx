@@ -6,6 +6,7 @@ import { Login } from './pages/Login';
 import { ContatosPage } from './pages/Contatos';
 import { UsuariosPage } from './pages/Usuarios';
 import { NegociosPage } from './pages/Negocios';
+import { ImportarDadosPage } from './pages/ImportarDados';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
               <Route path="/contatos" element={<ContatosPage />} />
               <Route path="/usuarios" element={<UsuariosPage />} />
               <Route path="/negocios" element={<NegociosPage />} />
+              <Route path="/importacoes" element={<ImportarDadosPage />} />
 
             </Route>
           </Route>

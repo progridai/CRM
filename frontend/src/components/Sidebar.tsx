@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, Handshake, ShieldCheck, Briefcase } from 'lucide-react';
+import { Users, Handshake, ShieldCheck, Briefcase, FileUp } from 'lucide-react';
 
 interface SidebarProps {
   negociosCount?: number;
@@ -72,6 +72,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ negociosCount, contactsCount, 
                 </span>
               )}
             </>
+          )}
+        </NavLink>
+
+        {/* Importação */}
+        <NavLink
+          id="nav-importacoes"
+          to="/importacoes"
+          className={({ isActive }) =>
+            `w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all ${
+              isActive
+                ? 'bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/60 font-medium'
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <div className="flex items-center gap-2.5">
+              <FileUp
+                className={`w-4 h-4 ${
+                  isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
+                }`}
+              />
+              <span>Importar dados</span>
+            </div>
           )}
         </NavLink>
 

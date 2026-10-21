@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, X, Phone, MessageCircle, MessageSquare, Zap, ExternalLink, FileText, CreditCard } from 'lucide-react';
 import { listarAtividades, registrarAtividade, type AtividadeDto, type EtapaDto, type NegocioDto } from '../../services/negociosService';
 import { useQuickActivityTemplates } from '../../hooks/useQuickActivityTemplates';
-import { getNameInitial } from '../../utils';
+import { getNameInitial, getWhatsAppLink } from '../../utils';
 
 interface KanbanBoardProps {
   etapas: EtapaDto[];
@@ -191,9 +191,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                               <h3 className="font-display font-semibold text-xs text-slate-900 dark:text-slate-100 tracking-tight truncate">
                                 {primeiro.nomeCliente}
                               </h3>
-                              <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium tracking-tight truncate">
-                                {primeiro.telefonePrincipal || 'Telefone não informado'}
-                              </div>
+                              {primeiro.telefonePrincipal ? (
+                                <a
+                                  href={getWhatsAppLink(primeiro.telefonePrincipal)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="group/phone mt-0.5 inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 -ml-1 text-[11px] font-medium tracking-tight text-slate-500 transition-all hover:bg-emerald-50/80 hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400"
+                                  title="Conversar no WhatsApp"
+                                  aria-label={`Conversar com ${primeiro.nomeCliente} no WhatsApp pelo número ${primeiro.telefonePrincipal}`}
+                                >
+                                  <span className="truncate">{primeiro.telefonePrincipal}</span>
+                                  <span className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white opacity-0 shadow-2xs transition-all duration-150 group-hover/phone:scale-110 group-hover/phone:bg-[#20bd5a] group-hover/phone:opacity-100 group-focus-visible/phone:opacity-100">
+                                    <MessageCircle className="h-2.5 w-2.5 fill-white/30 text-white" strokeWidth={2.4} />
+                                  </span>
+                                </a>
+                              ) : (
+                                <div className="mt-0.5 truncate text-[11px] font-medium tracking-tight text-slate-500 dark:text-slate-400">
+                                  Telefone não informado
+                                </div>
+                              )}
                             </div>
                             
                             <div className="flex items-center shrink-0 ml-2 relative">

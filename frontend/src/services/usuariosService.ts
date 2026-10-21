@@ -8,6 +8,7 @@ export interface UsuarioBasicoDto {
 }
 
 export interface UsuarioDto extends UsuarioBasicoDto {
+  usuarioPublicId: string;
   posicoesEmAberto?: number;
   posicoesRecuperadas?: number;
   recuperadoNoMes?: number;

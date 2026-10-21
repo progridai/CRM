@@ -6,6 +6,7 @@ namespace ProgridPlus.Api.Seguranca;
 /// </summary>
 public sealed record UsuarioListaDto(
     long    UsuarioId,
+    Guid    UsuarioPublicId,
     string  Nome,
     string  Username,
     string  Email,

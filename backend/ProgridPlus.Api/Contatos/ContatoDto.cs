@@ -11,11 +11,19 @@ public sealed record ContatoDto(
     string Documento,
     int    TipoPessoa,         // 1 = Física, 2 = Jurídica
     string TelefonePrincipal,
+    IReadOnlyList<ContatoTelefoneDto> Telefones,
     string Origem,
     decimal TotalEmDebito,
     string StatusGeral,
     string StatusCodigo,
     string? StatusCorHex
+);
+
+public sealed record ContatoTelefoneDto(
+    long Id,
+    string Tipo,
+    string Valor,
+    bool Principal
 );
 
 /// <summary>

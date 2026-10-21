@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using ProgridPlus.Api.Auth;
 using ProgridPlus.Api.Contatos;
 using ProgridPlus.Api.Data;
+using ProgridPlus.Api.Importacoes;
 using ProgridPlus.Api.Seguranca;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,9 +48,9 @@ builder.Services.AddDbContext<CrmDbContext>(options =>
 // Registrado como Scoped para ter a mesma vida util da request HTTP.
 builder.Services.AddScoped<SegurancaConsulta>();
 
-// ContatosConsulta: executa queries de leitura no schema core.pessoa / core.pessoa_contato.
-// Somente leitura — o CRM não cria tabela própria de contatos.
+// Contatos: leitura e manutenção dos telefones compartilhados com o WebApólice.
 builder.Services.AddScoped<ContatosConsulta>();
+builder.Services.AddScoped<ContatoTelefoneComando>();
 
 // NegociosConsulta: executa queries de leitura no schema crm.
 builder.Services.AddScoped<ProgridPlus.Api.Negocios.NegociosConsulta>();
@@ -58,6 +59,9 @@ builder.Services.AddScoped<ProgridPlus.Api.Negocios.AtividadeAtalhosConsulta>();
 // NegocioComando: serviço de escrita no schema crm (criação de negócios).
 builder.Services.AddScoped<ProgridPlus.Api.Negocios.NegocioComando>();
 builder.Services.AddScoped<ProgridPlus.Api.Negocios.AtividadeAtalhoComando>();
+
+// Importação de planilhas de inadimplência para o Kanban.
+builder.Services.AddScoped<ImportacaoNegociosServico>();
 // Authentication via Keycloak JWT Bearer
 var authority = builder.Configuration.GetValue<string>("Authentication:Authority")
     ?? throw new InvalidOperationException("Missing Authentication:Authority");
