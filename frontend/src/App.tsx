@@ -19,7 +19,7 @@ function App() {
           {/* Rotas protegidas — dentro do layout com Sidebar + Header */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
-              <Route index element={<Navigate to="/contatos" replace />} />
+              <Route index element={<Navigate to="/negocios" replace />} />
               <Route path="/contatos" element={<ContatosPage />} />
               <Route path="/usuarios" element={<UsuariosPage />} />
               <Route path="/negocios" element={<NegociosPage />} />
@@ -28,7 +28,7 @@ function App() {
             </Route>
           </Route>
 
-          <Route path="*" element={<Navigate to="/contatos" replace />} />
+          <Route path="*" element={<Navigate to="/negocios" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
