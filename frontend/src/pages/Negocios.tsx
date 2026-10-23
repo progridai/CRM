@@ -13,7 +13,7 @@ import {
   filterNegocios,
   type NegociosFilters,
 } from '../components/Negocios/negociosIndicators';
-import type { ViewMode } from '../types';
+import type { NegociosSort, ViewMode } from '../types';
 
 export const NegociosPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,6 +21,7 @@ export const NegociosPage: React.FC = () => {
   const negocioSelecionadoId = searchParams.get('negocio')?.trim();
   const abrirNovoNegocio = searchParams.get('novo') === '1';
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [sortMode, setSortMode] = useState<NegociosSort>('name-asc');
   const [etapas, setEtapas]     = useState<EtapaDto[]>([]);
   const [negocios, setNegocios] = useState<NegocioDto[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -127,6 +128,8 @@ export const NegociosPage: React.FC = () => {
         todosNegocios={negocios}
         filters={filters}
         onFiltersChange={setFilters}
+        sortMode={sortMode}
+        onSortModeChange={setSortMode}
       />
 
       {erro && (
@@ -148,6 +151,7 @@ export const NegociosPage: React.FC = () => {
           onDropCard={handleDropCard} 
           onOpenQuickActivitiesManager={() => setQuickActivitiesOpen(true)}
           onAtividadeRegistrada={carregarDados}
+          sortMode={sortMode}
         />
       ) : (
         <NegociosListView
@@ -155,6 +159,7 @@ export const NegociosPage: React.FC = () => {
           negocios={negociosFiltrados}
           onSelectNegocio={setSelectedNegocio}
           onUpdateEtapa={handleDropCard}
+          sortMode={sortMode}
         />
       )}
 

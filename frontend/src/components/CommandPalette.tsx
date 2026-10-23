@@ -22,6 +22,21 @@ const normalizeSearch = (value?: string | null) =>
     .toLocaleLowerCase('pt-BR')
     .replace(/[^a-z0-9]/g, '');
 
+const alphabeticalCollator = new Intl.Collator('pt-BR', {
+  sensitivity: 'base',
+  numeric: true,
+});
+
+const compareNames = (first?: string | null, second?: string | null) => {
+  const firstName = first?.trim() ?? '';
+  const secondName = second?.trim() ?? '';
+
+  if (!firstName) return secondName ? 1 : 0;
+  if (!secondName) return -1;
+
+  return alphabeticalCollator.compare(firstName, secondName);
+};
+
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,25 +73,33 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   const normalizedQuery = normalizeSearch(query);
 
   const filteredNegocios = useMemo(() => {
-    if (!normalizedQuery) return negocios;
+    const matchingNegocios = normalizedQuery
+      ? negocios.filter((negocio) =>
+          [
+            negocio.nomeCliente,
+            negocio.documento,
+            negocio.telefonePrincipal,
+            negocio.referencia,
+          ].some((value) => normalizeSearch(value).includes(normalizedQuery)),
+        )
+      : negocios;
 
-    return negocios.filter((negocio) =>
-      [
-        negocio.nomeCliente,
-        negocio.documento,
-        negocio.telefonePrincipal,
-        negocio.referencia,
-      ].some((value) => normalizeSearch(value).includes(normalizedQuery)),
+    return [...matchingNegocios].sort((first, second) =>
+      compareNames(first.nomeCliente, second.nomeCliente),
     );
   }, [negocios, normalizedQuery]);
 
   const filteredContatos = useMemo(() => {
-    if (!normalizedQuery) return contatos;
+    const matchingContatos = normalizedQuery
+      ? contatos.filter((contato) =>
+          [contato.nome, contato.documento, contato.telefonePrincipal].some((value) =>
+            normalizeSearch(value).includes(normalizedQuery),
+          ),
+        )
+      : contatos;
 
-    return contatos.filter((contato) =>
-      [contato.nome, contato.documento, contato.telefonePrincipal].some((value) =>
-        normalizeSearch(value).includes(normalizedQuery),
-      ),
+    return [...matchingContatos].sort((first, second) =>
+      compareNames(first.nome, second.nome),
     );
   }, [contatos, normalizedQuery]);
 

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Search, Kanban, List, Plus } from 'lucide-react';
-import type { ViewMode } from '../../types';
+import { ArrowUpDown, Search, Kanban, List, Plus } from 'lucide-react';
+import type { NegociosSort, ViewMode } from '../../types';
 import { formatCurrency } from '../../utils';
 import type { NegocioDto } from '../../services/negociosService';
 import {
@@ -17,6 +17,8 @@ interface NegociosHeaderProps {
   todosNegocios: NegocioDto[];
   filters: NegociosFilters;
   onFiltersChange: (filters: NegociosFilters) => void;
+  sortMode: NegociosSort;
+  onSortModeChange: (sortMode: NegociosSort) => void;
 }
 
 const MESES_ABREV = [
@@ -32,6 +34,8 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
   todosNegocios,
   filters,
   onFiltersChange,
+  sortMode,
+  onSortModeChange,
 }) => {
   const ind = computeIndicators(negocios);
 
@@ -118,6 +122,22 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
               {ownerOptions.map((owner) => (
                 <option key={owner} value={owner}>{owner}</option>
               ))}
+            </select>
+          </label>
+
+          <label className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200/80 bg-slate-50 px-2.5 dark:border-slate-700/80 dark:bg-slate-800/80">
+            <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <span className="whitespace-nowrap text-xs text-slate-400">Ordenar:</span>
+            <select
+              aria-label="Ordenar negócios"
+              value={sortMode}
+              onChange={(event) => onSortModeChange(event.target.value as NegociosSort)}
+              className="max-w-32 cursor-pointer bg-transparent text-xs font-semibold text-slate-800 outline-none dark:text-slate-100"
+            >
+              <option value="name-asc">Nome A–Z</option>
+              <option value="name-desc">Nome Z–A</option>
+              <option value="value-desc">Maior valor</option>
+              <option value="value-asc">Menor valor</option>
             </select>
           </label>
         </div>

@@ -37,6 +37,42 @@ export interface ImportarNegociosParametros {
   onProgress?: (percentual: number) => void;
 }
 
+export type TipoOperacaoImportacao = 'IMPORTACAO' | 'EXCLUSAO_COMPETENCIA';
+export type ResultadoOperacaoImportacao = 'SUCESSO' | 'ERRO';
+
+export interface ImportacaoOperacaoDto {
+  publicId: string;
+  tipoOperacao: TipoOperacaoImportacao;
+  competenciaMes: number;
+  competenciaAno: number;
+  nomeArquivo?: string;
+  usuarioId?: number;
+  usuarioNome?: string;
+  dataHora: string;
+  quantidadeRegistros: number;
+  quantidadeInseridos: number;
+  quantidadeAtualizados: number;
+  quantidadeExcluidos: number;
+  valorTotal: number;
+  resultado: ResultadoOperacaoImportacao;
+  mensagem?: string;
+  dadosAdicionais?: string;
+}
+
+export interface CompetenciaResumoDto {
+  competenciaMes: number;
+  competenciaAno: number;
+  quantidade: number;
+  valorTotal: number;
+}
+
+export interface ExclusaoCompetenciaResultadoDto {
+  competencia: string;
+  quantidadeExcluida: number;
+  valorTotal: number;
+  sucesso: boolean;
+}
+
 export async function importarNegocios(
   parametros: ImportarNegociosParametros,
 ): Promise<ImportacaoNegociosResultadoDto> {
@@ -59,5 +95,34 @@ export async function importarNegocios(
   );
 
   parametros.onProgress?.(100);
+  return data;
+}
+
+export async function listarHistoricoImportacoes(
+  limite = 100,
+): Promise<ImportacaoOperacaoDto[]> {
+  const { data } = await api.get<ImportacaoOperacaoDto[]>('/api/importacoes/historico', {
+    params: { limite },
+  });
+  return data;
+}
+
+export async function consultarResumoCompetencia(
+  competenciaAno: number,
+  competenciaMes: number,
+): Promise<CompetenciaResumoDto> {
+  const { data } = await api.get<CompetenciaResumoDto>(
+    `/api/importacoes/competencias/${competenciaAno}/${competenciaMes}/resumo`,
+  );
+  return data;
+}
+
+export async function excluirCompetencia(
+  competenciaAno: number,
+  competenciaMes: number,
+): Promise<ExclusaoCompetenciaResultadoDto> {
+  const { data } = await api.delete<ExclusaoCompetenciaResultadoDto>(
+    `/api/importacoes/competencias/${competenciaAno}/${competenciaMes}`,
+  );
   return data;
 }

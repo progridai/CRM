@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2 } from 'lucide-react';
+import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2, ChevronRight, UserRound } from 'lucide-react';
 import type { NegocioDto, EtapaDto } from '../../services/negociosService';
 import { DealHistoryTimeline } from './DealHistoryTimeline';
 import { getNameInitial } from '../../utils';
@@ -185,43 +185,43 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 -mb-6 mt-2 pt-2">
+          <div className="grid grid-cols-3 border-b border-slate-100 dark:border-slate-800 -mb-6 mt-2 pt-2">
             <button
               type="button"
               onClick={() => setActiveTab('geral')}
-              className={`pb-2 px-1 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+              className={`flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
                 activeTab === 'geral'
                   ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
                   : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
-              Informações gerais
+              Visão geral
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('atividades')}
-              className={`pb-2 px-1 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
                 activeTab === 'atividades'
                   ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
                   : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
-              <span>Registro de Atividades</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-semibold">
+              <span>Atividades</span>
+              <span className="min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 {negocio.atividadesCount || 0}
               </span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('historico')}
-              className={`pb-2 px-1 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
                 activeTab === 'historico'
                   ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
                   : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               <span>Histórico</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-semibold">
+              <span className="min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 {historico.length}
               </span>
             </button>
@@ -339,21 +339,44 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   </select>
                 </div>
 
+                {/* Observações do negócio */}
+                <div className="col-span-2 mt-1 flex flex-col gap-1.5 border-t border-slate-200/70 pt-3 dark:border-slate-700/70">
+                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                    <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="text-[11px] font-medium">Observações</span>
+                  </div>
+                  <div className={`min-h-16 rounded-lg border px-3 py-2.5 text-xs leading-relaxed ${
+                    negocio.notas?.trim()
+                      ? 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+                      : 'border-dashed border-slate-200 bg-white/60 text-slate-400 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-500'
+                  }`}>
+                    <p className="whitespace-pre-wrap break-words">
+                      {negocio.notas?.trim() || 'Nenhuma observação informada.'}
+                    </p>
+                  </div>
+                </div>
+
               </div>
             </section>
           </div>
           )}
 
           {activeTab === 'atividades' && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-5">
               {!showAddActivityForm ? (
                 <button
                   type="button"
                   onClick={() => setShowAddActivityForm(true)}
-                  className="flex items-center justify-center gap-2 p-3 border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl text-indigo-700 font-semibold text-xs transition-all cursor-pointer shadow-2xs dark:bg-indigo-950/40 dark:border-indigo-800/60 dark:text-indigo-300 dark:hover:bg-indigo-900/50 dark:hover:border-indigo-700"
+                  className="group flex w-full items-center gap-3 rounded-xl border border-indigo-200/80 bg-indigo-50/60 px-3.5 py-3 text-left transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-sm dark:border-indigo-800/60 dark:bg-indigo-950/30 dark:hover:border-indigo-700 dark:hover:bg-indigo-950/50 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span>Registrar Nova Atividade / Contato</span>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100 transition-transform group-hover:scale-105 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-800">
+                    <Plus className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-bold text-slate-800 dark:text-slate-100">Registrar atividade</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500 dark:text-slate-400">Adicione uma interação ou atualização deste negócio</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-indigo-400 transition-transform group-hover:translate-x-0.5 dark:text-indigo-500" />
                 </button>
               ) : (
                 <form onSubmit={handleRegistrarAtividade} className="p-5 bg-white rounded-xl border border-slate-200 flex flex-col gap-4 dark:bg-[#101624] dark:border-slate-800 shadow-sm mb-4">
@@ -486,61 +509,73 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col mt-4">
+                <div className="relative flex flex-col">
                   {atividades.map((ativ, index) => {
                     const isLast = index === atividades.length - 1;
+                    const activityMeta = ativ.tipo === 'whatsapp'
+                      ? { label: 'WhatsApp', icon: MessageCircle, iconClass: 'bg-emerald-500 text-white', labelClass: 'text-emerald-600 dark:text-emerald-400' }
+                      : ativ.tipo === 'ligacao'
+                        ? { label: 'Ligação', icon: Phone, iconClass: 'bg-sky-500 text-white', labelClass: 'text-sky-600 dark:text-sky-400' }
+                        : ativ.tipo === 'pagamento'
+                          ? { label: 'Pagamento', icon: CreditCard, iconClass: 'bg-slate-600 text-white', labelClass: 'text-slate-600 dark:text-slate-300' }
+                          : { label: 'Anotação', icon: FileText, iconClass: 'bg-amber-500 text-white', labelClass: 'text-amber-600 dark:text-amber-400' };
+                    const ActivityIcon = activityMeta.icon;
+                    const occurredAt = new Date(ativ.ocorridoEm).toLocaleString('pt-BR', {
+                      timeZone: 'America/Sao_Paulo',
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
                     return (
-                    <div key={ativ.publicId} className="relative pl-10 pb-6">
-                      {/* Linha vertical */}
+                    <article key={ativ.publicId} className={`group relative pl-11 ${isLast ? '' : 'pb-3'}`}>
                       {!isLast && (
-                        <div className="absolute left-4 top-8 bottom-0 w-px bg-slate-200 dark:bg-slate-700"></div>
+                        <div className="absolute left-[15px] top-8 bottom-0 w-px bg-slate-200 dark:bg-slate-700" />
                       )}
-                      
-                      {/* Ícone Redondo Flutuante */}
-                      <div className={`absolute left-0 top-1 w-8 h-8 rounded-full flex items-center justify-center text-white shadow-sm ${
-                        ativ.tipo === 'whatsapp' ? 'bg-emerald-500' : 
-                        ativ.tipo === 'ligacao' ? 'bg-[#1FB6FF]' : 
-                        ativ.tipo === 'pagamento' ? 'bg-slate-500' : 
-                        'bg-amber-500'
-                      }`}>
-                        {ativ.tipo === 'whatsapp' ? <MessageCircle className="w-4 h-4" /> :
-                         ativ.tipo === 'ligacao' ? <Phone className="w-4 h-4 fill-current" /> :
-                         ativ.tipo === 'pagamento' ? <CreditCard className="w-4 h-4" /> :
-                         <FileText className="w-4 h-4" />}
+
+                      <div className={`absolute left-0 top-3 flex h-8 w-8 items-center justify-center rounded-full shadow-sm ring-4 ring-white dark:ring-slate-900 ${activityMeta.iconClass}`}>
+                        <ActivityIcon className="h-4 w-4" />
                       </div>
 
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          {/* Badge tipo */}
-                          <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-bold text-white shadow-sm ${
-                            ativ.tipo === 'whatsapp' ? 'bg-emerald-500' : 
-                            ativ.tipo === 'ligacao' ? 'bg-[#1FB6FF]' : 
-                            ativ.tipo === 'pagamento' ? 'bg-slate-500' : 
-                            'bg-amber-500'
-                          }`}>
-                            {ativ.tipo === 'whatsapp' ? <MessageCircle className="w-3.5 h-3.5" /> :
-                             ativ.tipo === 'ligacao' ? <Phone className="w-3.5 h-3.5 fill-current" /> :
-                             ativ.tipo === 'pagamento' ? <CreditCard className="w-3.5 h-3.5" /> :
-                             <FileText className="w-3.5 h-3.5" />}
-                            {ativ.tipo.charAt(0).toUpperCase() + ativ.tipo.slice(1)}
-                          </span>
-                          <h4 className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{ativ.titulo}</h4>
+                      <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition-colors hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-slate-700">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className={`block text-[10px] font-bold uppercase tracking-[0.08em] ${activityMeta.labelClass}`}>
+                              {activityMeta.label}
+                            </span>
+                            <h4 className="mt-0.5 break-words text-[13px] font-bold leading-snug text-slate-900 dark:text-slate-100">
+                              {ativ.titulo}
+                            </h4>
+                          </div>
+                          <div className="flex shrink-0 items-start gap-1.5">
+                            <time className="max-w-[82px] text-right text-[10px] font-medium leading-tight text-slate-400 dark:text-slate-500">
+                              {occurredAt}
+                            </time>
+                            <button
+                              type="button"
+                              aria-label={`Excluir atividade ${ativ.titulo}`}
+                              title="Excluir atividade"
+                              className="-mr-1 -mt-1 rounded-md p-1 text-slate-300 opacity-70 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:text-slate-600 dark:hover:bg-red-500/10 dark:hover:text-red-400 cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-[10px] text-slate-400 font-mono font-bold tracking-wider">
-                            {new Date(ativ.ocorridoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).toUpperCase()}
-                          </span>
-                          <button className="text-slate-300 hover:text-red-500 transition-colors cursor-pointer p-0.5">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
 
-                      {ativ.descricao && <p className="mt-2.5 text-[13px] text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{ativ.descricao}</p>}
-                      <div className="mt-2.5 text-[11px] text-slate-400 font-medium">
-                        Registrado por: {ativ.nomeUsuario}
+                        {ativ.descricao && (
+                          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                            {ativ.descricao}
+                          </p>
+                        )}
+
+                        <div className="mt-2.5 flex items-center gap-1.5 border-t border-slate-100 pt-2.5 text-[10px] font-medium text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                          <UserRound className="h-3 w-3" />
+                          <span>Registrado por {ativ.nomeUsuario}</span>
+                        </div>
                       </div>
-                    </div>
+                    </article>
                   )})}
                 </div>
               )}

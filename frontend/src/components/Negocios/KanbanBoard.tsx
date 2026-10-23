@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Loader2, X, Phone, MessageCircle, MessageSquare, Zap, ExternalLink, FileText, CreditCard } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Loader2, X, Phone, MessageCircle, MessageSquare, Plus, FileText, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { listarAtividades, registrarAtividade, type AtividadeDto, type EtapaDto, type NegocioDto } from '../../services/negociosService';
 import { useQuickActivityTemplates } from '../../hooks/useQuickActivityTemplates';
 import { getNameInitial, getWhatsAppLink } from '../../utils';
+import type { NegociosSort } from '../../types';
 
 interface KanbanBoardProps {
   etapas: EtapaDto[];
@@ -11,7 +13,11 @@ interface KanbanBoardProps {
   onDropCard: (negocioPublicId: string, novaEtapaCodigo: string) => void;
   onOpenQuickActivitiesManager: () => void;
   onAtividadeRegistrada?: () => void;
+  sortMode: NegociosSort;
 }
+
+type ActivityType = 'whatsapp' | 'ligacao' | 'pagamento' | 'anotacao';
+const ALL_GROUP_DEALS = '__all_group_deals__';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -20,32 +26,145 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCardClick, onDropCard, onOpenQuickActivitiesManager, onAtividadeRegistrada }) => {
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCardClick, onDropCard, onOpenQuickActivitiesManager, onAtividadeRegistrada, sortMode }) => {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [groupAtividades, setGroupAtividades] = useState<AtividadeDto[]>([]);
   const [loadingAtividades, setLoadingAtividades] = useState(false);
-  const [popoverTab, setPopoverTab] = useState<'history' | 'quick_create' | 'custom_form'>('history');
+  const [panelMode, setPanelMode] = useState<'history' | 'menu' | 'create' | 'quick'>('history');
   const [selectedNegocioId, setSelectedNegocioId] = useState<string | null>(null);
   const [submittingAtividade, setSubmittingAtividade] = useState(false);
+  const [submittingShortcutId, setSubmittingShortcutId] = useState<string | null>(null);
+  const [newActivityType, setNewActivityType] = useState<ActivityType>('whatsapp');
+  const [newActivityTitle, setNewActivityTitle] = useState('');
+  const [newActivityDescription, setNewActivityDescription] = useState('');
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const activityPanelRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [navigation, setNavigation] = useState({ previous: false, next: false });
+
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const updateNavigation = () => {
+      const previous = board.scrollLeft > 1;
+      const next = board.scrollLeft + board.clientWidth < board.scrollWidth - 1;
+      setNavigation(current => current.previous === previous && current.next === next
+        ? current : { previous, next });
+    };
+    const observer = new ResizeObserver(updateNavigation);
+    observer.observe(board);
+    if (board.firstElementChild) observer.observe(board.firstElementChild);
+    board.addEventListener('scroll', updateNavigation, { passive: true });
+    updateNavigation();
+    return () => {
+      observer.disconnect();
+      board.removeEventListener('scroll', updateNavigation);
+    };
+  }, [etapas.length]);
+
+  const navigateColumns = (direction: number) => {
+    setOpenGroup(null);
+    const board = boardRef.current;
+    if (!board) return;
+    const column = board.firstElementChild?.firstElementChild;
+    const step = column?.getBoundingClientRect().width || 346;
+    board.scrollBy({
+      left: direction * step,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    });
+  };
+  const [panelAnchor, setPanelAnchor] = useState({ x: 0, y: 0 });
+
+  const anchorAtClick = (event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPanelAnchor(event.detail === 0
+      ? { x: rect.right, y: rect.top }
+      : { x: event.clientX, y: event.clientY });
+  };
+
+  const keepPanelPosition = () => {
+    const rect = activityPanelRef.current?.getBoundingClientRect();
+    if (rect) setPanelAnchor({ x: rect.left, y: rect.top });
+  };
+
+  useLayoutEffect(() => {
+    const panel = activityPanelRef.current;
+    if (!openGroup || !panel) return;
+
+    const positionPanel = () => {
+      const margin = 12;
+      panel.style.maxHeight = `${Math.min(500, window.innerHeight - margin * 2)}px`;
+      const { width, height } = panel.getBoundingClientRect();
+      // Prefer the click position; shift only as far as necessary to stay on screen.
+      panel.style.left = `${Math.max(margin, Math.min(panelAnchor.x, window.innerWidth - width - margin))}px`;
+      panel.style.top = `${Math.max(margin, Math.min(panelAnchor.y, window.innerHeight - height - margin))}px`;
+    };
+
+    positionPanel();
+    const observer = new ResizeObserver(positionPanel);
+    observer.observe(panel);
+    window.addEventListener('resize', positionPanel);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', positionPanel);
+    };
+  }, [openGroup, panelMode, panelAnchor]);
 
   const { templates: shortcuts, loading: loadingShortcuts } = useQuickActivityTemplates();
 
-  const handleOpenAtividades = async (e: React.MouseEvent, chave: string, idsStr: string) => {
+  useEffect(() => {
+    if (!openGroup) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (activityPanelRef.current?.contains(target) || target.closest('[data-activity-trigger]')) return;
+      setOpenGroup(null);
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenGroup(null);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [openGroup]);
+
+  const handleOpenActivitiesPanel = async (
+    e: React.MouseEvent,
+    chave: string,
+    idsStr: string,
+    mode: 'history' | 'menu'
+  ) => {
     e.stopPropagation();
-    if (openGroup === chave) {
+    if (openGroup === chave && panelMode === mode) {
       setOpenGroup(null);
       return;
     }
+
+    anchorAtClick(e);
     setOpenGroup(chave);
-    setPopoverTab('history');
+    setPanelMode(mode);
+
+    const ids = idsStr.split(',');
+    setSelectedNegocioId(ids.length === 1 ? ids[0] : null);
+
+    if (mode === 'menu') {
+      setNewActivityType('whatsapp');
+      setNewActivityTitle('');
+      setNewActivityDescription('');
+      setActivityError(null);
+      setSubmittingShortcutId(null);
+      return;
+    }
+
+    setGroupAtividades([]);
     setLoadingAtividades(true);
     try {
-      const ids = idsStr.split(',');
-      if (ids.length === 1) {
-        setSelectedNegocioId(ids[0]);
-      } else {
-        setSelectedNegocioId(null);
-      }
       const data = await listarAtividades(ids);
       setGroupAtividades(data);
     } catch (err) {
@@ -55,22 +174,36 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
     }
   };
 
-  const handleCreateActivity = async (tipo: string, titulo: string, descricao: string) => {
-    if (!selectedNegocioId) {
-      alert("Por favor, selecione um negócio para registrar a atividade.");
+  const handleCreateActivity = async (
+    tipo: string,
+    titulo: string,
+    descricao: string,
+    targetNegocioIds?: string[],
+  ) => {
+    const negocioIds = targetNegocioIds
+      ?? (selectedNegocioId && selectedNegocioId !== ALL_GROUP_DEALS ? [selectedNegocioId] : []);
+
+    if (negocioIds.length === 0) {
+      setActivityError('Selecione o negócio em que a atividade será registrada.');
       return;
     }
     try {
       setSubmittingAtividade(true);
-      await registrarAtividade(selectedNegocioId, { tipo, titulo, descricao });
+      setActivityError(null);
+      await Promise.all(
+        negocioIds.map((negocioId) =>
+          registrarAtividade(negocioId, { tipo, titulo, descricao }),
+        ),
+      );
 
-      // Close the popover immediately after success
+      setNewActivityTitle('');
+      setNewActivityDescription('');
       setOpenGroup(null);
 
-      // Notify parent to refresh negocios (updates atividadesCount on each card)
       onAtividadeRegistrada?.();
     } catch (err) {
       console.error('Erro ao registrar atividade', err);
+      setActivityError('Não foi possível registrar a atividade. Tente novamente.');
     } finally {
       setSubmittingAtividade(false);
     }
@@ -98,8 +231,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
   };
 
   return (
-    <div className="flex-1 overflow-x-auto overflow-y-hidden -mx-4 px-4 sm:mx-0 sm:px-0">
-      <div className="flex gap-4 h-full pb-4 items-start min-h-[500px]">
+    <div className="flex min-w-0 flex-1 flex-col">
+      <nav aria-label="Navegação das colunas do Kanban" className="mb-3 flex items-center justify-end gap-2">
+        <span className="mr-1 text-xs text-slate-500 dark:text-slate-400">Navegar pelas etapas</span>
+        <button type="button" onClick={() => navigateColumns(-1)} disabled={!navigation.previous}
+          aria-label="Ver colunas anteriores" title="Colunas anteriores" aria-controls="kanban-columns"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-default disabled:opacity-30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => navigateColumns(1)} disabled={!navigation.next}
+          aria-label="Ver próximas colunas" title="Próximas colunas" aria-controls="kanban-columns"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-default disabled:opacity-30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </nav>
+    <div ref={boardRef} id="kanban-columns" tabIndex={0} aria-label="Colunas do Kanban" className="flex-1 overflow-x-auto overflow-y-hidden -mx-4 px-4 sm:mx-0 sm:px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+      <div className="-mx-2 flex min-h-[500px] items-stretch pb-4">
         {etapas.map((etapa) => {
           // Filtra negócios desta etapa
           const negociosEtapa = negocios.filter((n) => n.etapaCodigo === etapa.codigo);
@@ -112,13 +259,17 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
           const fallbackBgColor = color + '15';
 
           return (
-            <section
+            <div
               key={etapa.codigo}
-              style={{ backgroundColor: `var(--kanban-${etapa.codigo}-bg, ${fallbackBgColor})` }}
-              className="w-[330px] flex-shrink-0 flex flex-col gap-3 p-2 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 transition-colors"
+              className="w-[346px] flex-shrink-0 self-stretch px-2"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, etapa.codigo)}
+              aria-label={`Área de destino da etapa ${etapa.nome}`}
             >
+              <section
+                style={{ backgroundColor: `var(--kanban-${etapa.codigo}-bg, ${fallbackBgColor})` }}
+                className="flex w-full flex-col gap-3 rounded-2xl border border-slate-200/60 p-2 transition-colors dark:border-slate-800/80"
+              >
               {/* Column Header */}
               <div className="flex items-center justify-between px-2 py-1.5 gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
@@ -159,7 +310,29 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
 
                     const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-                    return Object.entries(grupos).map(([chave, grupo]) => {
+                    const gruposOrdenados = Object.entries(grupos).sort(([, grupoA], [, grupoB]) => {
+                      if (sortMode === 'value-desc' || sortMode === 'value-asc') {
+                        const totalA = grupoA.reduce((total, negocio) => total + negocio.valor, 0);
+                        const totalB = grupoB.reduce((total, negocio) => total + negocio.valor, 0);
+                        return sortMode === 'value-desc' ? totalB - totalA : totalA - totalB;
+                      }
+
+                      const comparison = grupoA[0].nomeCliente.localeCompare(
+                        grupoB[0].nomeCliente,
+                        'pt-BR',
+                        { sensitivity: 'base', numeric: true },
+                      );
+                      return sortMode === 'name-desc' ? -comparison : comparison;
+                    });
+
+                    return gruposOrdenados.map(([chave, grupoOriginal]) => {
+                      const grupo = sortMode === 'value-desc' || sortMode === 'value-asc'
+                        ? [...grupoOriginal].sort((negocioA, negocioB) =>
+                            sortMode === 'value-desc'
+                              ? negocioB.valor - negocioA.valor
+                              : negocioA.valor - negocioB.valor,
+                          )
+                        : grupoOriginal;
                       const totalGrupo = grupo.reduce((acc, n) => acc + n.valor, 0);
                       const totalAtividades = grupo.reduce((acc, n) => acc + (n.atividadesCount || 0), 0);
                       const primeiro = grupo[0];
@@ -213,54 +386,78 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                               )}
                             </div>
                             
-                            <div className="flex items-center shrink-0 ml-2 relative">
+                            <div className="relative ml-2 flex shrink-0 items-center gap-1">
                               <button
                                 type="button"
-                                onClick={(e) => handleOpenAtividades(e, chave, idsGrupo)}
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border cursor-pointer transition-colors ${openGroup === chave ? 'border-indigo-300 bg-indigo-50 text-indigo-600 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' : 'border-slate-200/70 dark:border-slate-700/80 text-[10px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                                title={`${totalAtividades} atividades registradas`}
+                                data-activity-trigger
+                                onClick={(e) => handleOpenActivitiesPanel(e, chave, idsGrupo, 'history')}
+                                className={`inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[10px] font-semibold transition-colors ${openGroup === chave && panelMode === 'history' ? 'border-indigo-300 bg-indigo-50 text-indigo-600 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' : 'border-slate-200/70 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:border-slate-700/80 dark:bg-slate-800/80 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-300'}`}
+                                title={`Ver histórico de atividades (${totalAtividades})`}
+                                aria-label={`Ver histórico de atividades de ${primeiro.nomeCliente}`}
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
                                 <span>{totalAtividades}</span>
+                              </button>
+                              <button
+                                type="button"
+                                data-activity-trigger
+                                onClick={(e) => handleOpenActivitiesPanel(e, chave, idsGrupo, 'menu')}
+                                className={`inline-flex h-6 w-6 items-center justify-center rounded-md border transition-colors ${openGroup === chave && panelMode !== 'history' ? 'border-indigo-300 bg-indigo-50 text-indigo-600 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' : 'border-slate-200/70 bg-slate-50 text-slate-400 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 dark:border-slate-700/80 dark:bg-slate-800/80 dark:text-slate-500 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-400'}`}
+                                title="Adicionar atividade"
+                                aria-label={`Adicionar atividade para ${primeiro.nomeCliente}`}
+                              >
+                                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                               </button>
                             </div>
                           </div>
 
                           {/* Popover de Atividades */}
-                          {openGroup === chave && (
-                            <div 
-                              className="absolute top-10 left-0 w-full sm:w-[320px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl rounded-xl z-50 flex flex-col"
+                          {openGroup === chave && createPortal(
+                            <div
+                              ref={activityPanelRef}
+                              className={`fixed z-50 flex max-w-[calc(100vw-24px)] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 ${
+                                panelMode === 'menu'
+                                  ? 'w-[250px] rounded-lg p-1.5'
+                                  : 'w-[320px] rounded-xl'
+                              }`}
                               onClick={(e) => e.stopPropagation()}
                               onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
                               draggable={true}
-                              style={{ maxHeight: '350px' }}
+                              style={{ left: panelAnchor.x, top: panelAnchor.y }}
                             >
-                              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                  </div>
-                                  <span className="font-bold text-[13px] text-slate-800 dark:text-slate-100">Atividades Registradas</span>
-                                  <span className="bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-full text-[10px] font-bold border border-indigo-100 dark:border-indigo-800/60">{totalAtividades}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <button onClick={() => setPopoverTab(popoverTab === 'history' ? 'quick_create' : 'history')} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
-                                    <Zap className={`w-3.5 h-3.5 ${popoverTab === 'quick_create' ? 'text-amber-500 fill-amber-500' : ''}`} />
-                                  </button>
-                                  <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); setOpenGroup(null); }}
-                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
 
-                              <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
-                                {popoverTab === 'history' ? (
+                              {panelMode !== 'menu' && (
+                                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                      {panelMode === 'history' ? <MessageSquare className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                                    </div>
+                                    <span className="font-bold text-[13px] text-slate-800 dark:text-slate-100">
+                                      {panelMode === 'history'
+                                        ? 'Histórico de atividades'
+                                        : panelMode === 'quick'
+                                          ? 'Registrar atividade rápida'
+                                          : 'Cadastrar atividade'}
+                                    </span>
+                                    {panelMode === 'history' && (
+                                      <span className="bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-full text-[10px] font-bold border border-indigo-100 dark:border-indigo-800/60">{totalAtividades}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setOpenGroup(null); }}
+                                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                      title="Fechar"
+                                      aria-label="Fechar painel de atividades"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className={panelMode === 'menu' ? 'overflow-y-auto' : 'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3'}>
+                                {panelMode === 'history' ? (
                                   loadingAtividades ? (
                                     <div className="flex items-center justify-center py-4">
                                       <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
@@ -270,108 +467,319 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                                       <span className="text-xs text-slate-500">Nenhuma atividade registrada</span>
                                     </div>
                                   ) : (
-                                    groupAtividades.map(ativ => {
-                                      return (
-                                      <div key={ativ.publicId} className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col relative group">
-                                        <div className="flex items-start justify-between mb-2">
-                                          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold text-white shadow-xs ${
-                                            ativ.tipo === 'whatsapp' ? 'bg-emerald-500' : 
-                                            ativ.tipo === 'ligacao' ? 'bg-[#1FB6FF]' : 
-                                            ativ.tipo === 'pagamento' ? 'bg-slate-500' : 
-                                            'bg-amber-500'
-                                          }`}>
-                                            {ativ.tipo === 'whatsapp' ? <MessageCircle className="w-3.5 h-3.5" /> :
-                                             ativ.tipo === 'ligacao' ? <Phone className="w-3.5 h-3.5 fill-current" /> :
-                                             ativ.tipo === 'pagamento' ? <CreditCard className="w-3.5 h-3.5" /> :
-                                             <FileText className="w-3.5 h-3.5" />}
-                                            {ativ.tipo.charAt(0).toUpperCase() + ativ.tipo.slice(1)}
+                                    <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+                                      {groupAtividades.map(ativ => (
+                                        <div key={ativ.publicId} className="flex items-start gap-2.5 px-3 py-2.5">
+                                          <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                                            ativ.tipo === 'whatsapp' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' :
+                                            ativ.tipo === 'ligacao' ? 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400' :
+                                            ativ.tipo === 'pagamento' ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' :
+                                            'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
+                                          }`} title={ativ.tipo.charAt(0).toUpperCase() + ativ.tipo.slice(1)}>
+                                            {ativ.tipo === 'whatsapp' ? <MessageCircle className="h-3 w-3" /> :
+                                             ativ.tipo === 'ligacao' ? <Phone className="h-3 w-3" /> :
+                                             ativ.tipo === 'pagamento' ? <CreditCard className="h-3 w-3" /> :
+                                             <FileText className="h-3 w-3" />}
                                           </div>
-                                          <span className="text-[10px] text-slate-400 font-mono font-medium pt-1">
-                                            {new Date(ativ.ocorridoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}
-                                          </span>
+
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-start justify-between gap-2">
+                                              <h4 className="truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{ativ.titulo}</h4>
+                                              <time className="shrink-0 text-[9px] font-medium text-slate-400">
+                                                {new Date(ativ.ocorridoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}
+                                              </time>
+                                            </div>
+                                            {ativ.descricao && (
+                                              <p className="mt-0.5 truncate text-[11px] leading-4 text-slate-500 dark:text-slate-400" title={ativ.descricao}>
+                                                {ativ.descricao}
+                                              </p>
+                                            )}
+                                            <p className="mt-1 truncate text-[9px] text-slate-400">
+                                              {ativ.tipo.charAt(0).toUpperCase() + ativ.tipo.slice(1)} · {ativ.nomeUsuario}
+                                            </p>
+                                          </div>
                                         </div>
-                                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1 leading-tight">{ativ.titulo}</h4>
-                                        {ativ.descricao && <p className="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed mb-3">{ativ.descricao}</p>}
-                                        
-                                        <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/60 flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                          <span>Registrado por: {ativ.nomeUsuario}</span>
-                                        </div>
-                                      </div>
-                                    )})
-                                  )
-                                ) : (
-                                  <div className="flex flex-col gap-1">
-                                    <div className="mb-2">
-                                      <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-2">Registrar Atividade Rápida</h4>
-                                      {grupo.length > 1 && (
-                                        <div className="mb-3">
-                                          <label className="text-[10px] text-slate-500 font-semibold mb-1 block">Selecione o negócio de destino:</label>
-                                          <select 
-                                            value={selectedNegocioId || ''} 
-                                            onChange={(e) => setSelectedNegocioId(e.target.value)}
-                                            className="w-full text-xs p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 outline-none"
-                                          >
-                                            <option value="" disabled>Selecione um negócio...</option>
-                                            {grupo.map(n => (
-                                              <option key={n.publicId} value={n.publicId}>
-                                                {n.competenciaAno ? `Comp: ${n.competenciaMes}/${n.competenciaAno}` : 'Negócio sem data'} - {formatCurrency(n.valor)}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </div>
-                                      )}
+                                      ))}
                                     </div>
-                                    
-                                    {loadingShortcuts ? (
-                                      <div className="flex items-center justify-center py-4">
-                                        <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-                                      </div>
-                                    ) : shortcuts.length === 0 ? (
-                                      <div className="text-center py-4 text-xs text-slate-500">
-                                        Nenhum atalho cadastrado.
-                                      </div>
-                                    ) : (
-                                      shortcuts.map(shortcut => (
-                                        <button 
-                                          key={shortcut.publicId}
-                                          disabled={submittingAtividade || (grupo.length > 1 && !selectedNegocioId)}
-                                          onClick={() => handleCreateActivity(shortcut.tipo, shortcut.tituloPadrao, shortcut.descricaoPadrao || '')}
-                                          className={`flex items-center gap-2 p-2 rounded-lg text-left transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 ${(submittingAtividade || (grupo.length > 1 && !selectedNegocioId)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  )
+                                ) : panelMode === 'menu' ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        keepPanelPosition();
+                                        setNewActivityType('whatsapp');
+                                        setNewActivityTitle('');
+                                        setNewActivityDescription('');
+                                        setActivityError(null);
+                                        setSelectedNegocioId(grupo.length === 1 ? grupo[0].publicId : null);
+                                        setPanelMode('create');
+                                      }}
+                                      className="flex w-full items-center gap-3 rounded-lg border border-transparent px-2.5 py-2.5 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800/60"
+                                    >
+                                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                                        <FileText className="h-4 w-4" />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Cadastrar atividade</span>
+                                        <span className="mt-0.5 block text-[10px] text-slate-400">Informe o tipo, título e detalhes.</span>
+                                      </span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        keepPanelPosition();
+                                        setActivityError(null);
+                                        setSelectedNegocioId(grupo.length > 1 ? ALL_GROUP_DEALS : grupo[0]?.publicId ?? null);
+                                        setPanelMode('quick');
+                                      }}
+                                      className="flex w-full items-center gap-3 rounded-lg border border-transparent px-2.5 py-2.5 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800/60"
+                                    >
+                                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                                        <MessageSquare className="h-4 w-4" />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Registrar atividade rápida</span>
+                                        <span className="mt-0.5 block text-[10px] text-slate-400">Use um atalho e registre com um clique.</span>
+                                      </span>
+                                    </button>
+                                  </div>
+                                ) : panelMode === 'quick' ? (
+                                  <div className="flex flex-col gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivityError(null);
+                                        setPanelMode('menu');
+                                      }}
+                                      className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                    >
+                                      <ChevronLeft className="h-3.5 w-3.5" />
+                                      Voltar às ações
+                                    </button>
+
+                                    {grupo.length > 1 && (
+                                      <label className="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                        Negócio de destino
+                                        <select
+                                          value={selectedNegocioId || ''}
+                                          onChange={(event) => {
+                                            setSelectedNegocioId(event.target.value);
+                                            setActivityError(null);
+                                          }}
+                                          className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-indigo-900/40"
                                         >
-                                          <div className={`w-7 h-7 rounded flex items-center justify-center shrink-0 ${
-                                            shortcut.tipo === 'whatsapp' ? 'bg-emerald-500 text-white' : 
-                                            shortcut.tipo === 'ligacao' ? 'bg-[#1FB6FF] text-white' : 
-                                            shortcut.tipo === 'pagamento' ? 'bg-slate-500 text-white' : 
-                                            'bg-amber-500 text-white'
-                                          }`}>
-                                            {shortcut.tipo === 'whatsapp' ? <MessageCircle className="w-3.5 h-3.5" /> :
-                                             shortcut.tipo === 'ligacao' ? <Phone className="w-3.5 h-3.5 fill-current" /> :
-                                             shortcut.tipo === 'pagamento' ? <CreditCard className="w-3.5 h-3.5" /> :
-                                             <FileText className="w-3.5 h-3.5" />}
-                                          </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate">{shortcut.tituloPadrao}</div>
-                                            {shortcut.descricaoPadrao && <div className="text-[9px] text-slate-500 truncate">{shortcut.descricaoPadrao}</div>}
-                                          </div>
-                                        </button>
-                                      ))
+                                          <option value={ALL_GROUP_DEALS}>Todos ({grupo.length} negócios)</option>
+                                          {grupo.map(n => (
+                                            <option key={n.publicId} value={n.publicId}>
+                                              {n.competenciaAno ? `${n.competenciaMes}/${n.competenciaAno}` : 'Sem competência'} · {formatCurrency(n.valor)}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
                                     )}
-                                    <div className="mt-2 border-t border-slate-100 dark:border-slate-800 pt-2 flex justify-end">
-                                      <button 
+
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div>
+                                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Registro rápido</h4>
+                                        <p className="mt-0.5 text-[9px] text-slate-400">Clique em um atalho para registrar.</p>
+                                      </div>
+                                      <button
+                                        type="button"
                                         onClick={() => {
                                           setOpenGroup(null);
                                           onOpenQuickActivitiesManager();
                                         }}
-                                        className="text-xs text-indigo-600 hover:text-indigo-800 font-bold"
+                                        className="shrink-0 text-[10px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
                                       >
-                                        Gerenciar Atalhos
+                                        Gerenciar
                                       </button>
                                     </div>
+
+                                    {loadingShortcuts ? (
+                                      <div className="flex items-center justify-center py-4">
+                                        <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                                      </div>
+                                    ) : shortcuts.length === 0 ? (
+                                      <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center dark:border-slate-700">
+                                        <p className="text-[11px] font-medium text-slate-500">Nenhum atalho cadastrado.</p>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenGroup(null);
+                                            onOpenQuickActivitiesManager();
+                                          }}
+                                          className="mt-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+                                        >
+                                          Criar atalhos
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100 dark:divide-slate-800 dark:border-slate-800">
+                                        {shortcuts.map(shortcut => (
+                                          <button
+                                            key={shortcut.publicId}
+                                            type="button"
+                                            disabled={submittingAtividade || !selectedNegocioId}
+                                            onClick={() => {
+                                              const targetIds = selectedNegocioId === ALL_GROUP_DEALS
+                                                ? grupo.map((negocio) => negocio.publicId)
+                                                : selectedNegocioId
+                                                  ? [selectedNegocioId]
+                                                  : [];
+                                              setSubmittingShortcutId(shortcut.publicId);
+                                              void handleCreateActivity(
+                                                shortcut.tipo,
+                                                shortcut.tituloPadrao,
+                                                shortcut.descricaoPadrao || '',
+                                                targetIds,
+                                              )
+                                                .finally(() => setSubmittingShortcutId(null));
+                                            }}
+                                            className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800/60"
+                                          >
+                                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white ${
+                                              shortcut.tipo === 'whatsapp' ? 'bg-emerald-500' :
+                                              shortcut.tipo === 'ligacao' ? 'bg-sky-500' :
+                                              shortcut.tipo === 'pagamento' ? 'bg-slate-500' :
+                                              'bg-amber-500'
+                                            }`}>
+                                              {shortcut.tipo === 'whatsapp' ? <MessageCircle className="h-3.5 w-3.5" /> :
+                                               shortcut.tipo === 'ligacao' ? <Phone className="h-3.5 w-3.5" /> :
+                                               shortcut.tipo === 'pagamento' ? <CreditCard className="h-3.5 w-3.5" /> :
+                                               <FileText className="h-3.5 w-3.5" />}
+                                            </span>
+                                            <span className="min-w-0 flex-1">
+                                              <span className="block truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">{shortcut.tituloPadrao}</span>
+                                              {shortcut.descricaoPadrao && <span className="mt-0.5 block truncate text-[9px] text-slate-400">{shortcut.descricaoPadrao}</span>}
+                                            </span>
+                                            {submittingShortcutId === shortcut.publicId && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-indigo-500" />}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {!selectedNegocioId && grupo.length > 1 && (
+                                      <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400">Selecione um negócio antes de registrar.</p>
+                                    )}
+
                                   </div>
+                                ) : (
+                                  <form
+                                    className="flex flex-col gap-3"
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      const title = newActivityTitle.trim();
+                                      if (!title) return;
+                                      void handleCreateActivity(newActivityType, title, newActivityDescription.trim());
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivityError(null);
+                                        setPanelMode('menu');
+                                      }}
+                                      className="inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                    >
+                                      <ChevronLeft className="h-3.5 w-3.5" />
+                                      Voltar às ações
+                                    </button>
+
+                                    {grupo.length > 1 && (
+                                      <label className="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                        Negócio de destino
+                                        <select
+                                          value={selectedNegocioId || ''}
+                                          onChange={(event) => {
+                                            setSelectedNegocioId(event.target.value);
+                                            setActivityError(null);
+                                          }}
+                                          className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-indigo-900/40"
+                                          required
+                                        >
+                                          <option value="" disabled>Selecione um negócio</option>
+                                          {grupo.map(n => (
+                                            <option key={n.publicId} value={n.publicId}>
+                                              {n.competenciaAno ? `${n.competenciaMes}/${n.competenciaAno}` : 'Sem competência'} · {formatCurrency(n.valor)}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    )}
+
+                                    <div className="grid grid-cols-4 gap-1.5" aria-label="Tipo de atividade">
+                                      {([
+                                        { type: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, active: 'border-emerald-500 bg-emerald-500 text-white', idle: 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40' },
+                                        { type: 'ligacao', label: 'Ligação', icon: Phone, active: 'border-sky-500 bg-sky-500 text-white', idle: 'border-sky-200 text-sky-600 hover:bg-sky-50 dark:border-sky-900 dark:text-sky-400 dark:hover:bg-sky-950/40' },
+                                        { type: 'pagamento', label: 'Pagamento', icon: CreditCard, active: 'border-slate-600 bg-slate-600 text-white', idle: 'border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800' },
+                                        { type: 'anotacao', label: 'Nota', icon: FileText, active: 'border-amber-500 bg-amber-500 text-white', idle: 'border-amber-200 text-amber-600 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-950/40' },
+                                      ] as const).map(({ type, label, icon: Icon, active, idle }) => (
+                                        <button
+                                          key={type}
+                                          type="button"
+                                          onClick={() => setNewActivityType(type)}
+                                          aria-pressed={newActivityType === type}
+                                          className={`flex h-8 min-w-0 items-center justify-center gap-1 rounded-md border px-1 text-[9px] font-semibold transition-colors ${newActivityType === type ? active : idle}`}
+                                        >
+                                          <Icon className="h-3 w-3 shrink-0" />
+                                          <span className="truncate">{label}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    <label className="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                      Título
+                                      <input
+                                        autoFocus
+                                        type="text"
+                                        value={newActivityTitle}
+                                        onChange={(event) => {
+                                          setNewActivityTitle(event.target.value);
+                                          setActivityError(null);
+                                        }}
+                                        placeholder="Ex.: Cliente solicitou retorno"
+                                        className="h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-normal text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-900/40"
+                                        required
+                                      />
+                                    </label>
+
+                                    <label className="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                      Observação <span className="sr-only">opcional</span>
+                                      <textarea
+                                        value={newActivityDescription}
+                                        onChange={(event) => setNewActivityDescription(event.target.value)}
+                                        placeholder="Detalhes opcionais…"
+                                        rows={2}
+                                        className="resize-none rounded-md border border-slate-200 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-900/40"
+                                      />
+                                    </label>
+
+                                    {activityError && <p className="text-[10px] font-medium text-rose-500">{activityError}</p>}
+
+                                    <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                                      <button
+                                        type="button"
+                                        onClick={() => setOpenGroup(null)}
+                                        className="h-8 rounded-md px-3 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                                      >
+                                        Cancelar
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        disabled={submittingAtividade || !newActivityTitle.trim() || !selectedNegocioId}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-md bg-indigo-600 px-3 text-[11px] font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        {submittingAtividade && <Loader2 className="h-3 w-3 animate-spin" />}
+                                        Registrar
+                                      </button>
+                                    </div>
+                                  </form>
                                 )}
                               </div>
-                            </div>
+                            </div>,
+                            document.body,
                           )}
 
                           {/* Lista de Negócios (Linhas) */}
@@ -429,7 +837,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                   })()
                 )}
               </div>
-            </section>
+              </section>
+            </div>
           );
         })}
 
@@ -439,6 +848,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };

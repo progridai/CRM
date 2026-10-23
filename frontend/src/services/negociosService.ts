@@ -41,6 +41,7 @@ export interface NegocioDto {
   competenciaMes: number;
   competenciaAno: number;
   origem?: string;
+  notas?: string;
   dataVencimento?: string;
   recuperadoEm?: string;
   etapaCodigo: string;

@@ -44,6 +44,7 @@ public sealed class NegociosConsulta
             n.competencia_mes AS CompetenciaMes,
             n.competencia_ano AS CompetenciaAno,
             n.origem          AS Origem,
+            n.notas           AS Notas,
             n.data_vencimento AS DataVencimento,
             CASE
                 WHEN e.classificacao = 'fechada_positiva'
@@ -174,6 +175,7 @@ public sealed class NegocioListaDto
     public int CompetenciaMes { get; set; }
     public int CompetenciaAno { get; set; }
     public string? Origem { get; set; }
+    public string? Notas { get; set; }
     public DateTime? DataVencimento { get; set; }
     public DateTime? RecuperadoEm { get; set; }
     public string EtapaCodigo { get; set; } = string.Empty;

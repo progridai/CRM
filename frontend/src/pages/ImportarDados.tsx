@@ -4,9 +4,11 @@ import {
   ArrowRight,
   CheckCircle2,
   ClipboardList,
+  Database,
   Download,
   FileCheck2,
   FileSpreadsheet,
+  History,
   Info,
   Loader2,
   PlusCircle,
@@ -18,6 +20,8 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import { GerenciarCompetencia } from '../components/Importacoes/GerenciarCompetencia';
+import { HistoricoImportacoes } from '../components/Importacoes/HistoricoImportacoes';
 import {
   importarNegocios,
   type ImportacaoNegociosResultadoDto,
@@ -80,6 +84,8 @@ export const ImportarDadosPage: React.FC = () => {
   const [confirmarSubstituicao, setConfirmarSubstituicao] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState<'todos' | StatusLogImportacao>('todos');
   const [buscaLog, setBuscaLog] = useState('');
+  const [activeTab, setActiveTab] = useState<'importar' | 'historico' | 'gerenciar'>('importar');
+  const [historicoRefreshKey, setHistoricoRefreshKey] = useState(0);
 
   const logsFiltrados = useMemo(() => {
     if (!resultado) return [];
@@ -134,6 +140,7 @@ export const ImportarDadosPage: React.FC = () => {
         onProgress: setProgresso,
       });
       setResultado(response);
+      setHistoricoRefreshKey((value) => value + 1);
       setFiltroStatus(response.naoImportados > 0 ? 'nao_importado' : 'todos');
       setBuscaLog('');
     } catch (requestError: any) {
@@ -204,7 +211,7 @@ export const ImportarDadosPage: React.FC = () => {
             Importe a inadimplência do Excel para a etapa Nova Posição. Contatos e responsáveis são validados antes de qualquer gravação.
           </p>
         </div>
-        {resultado && (
+        {activeTab === 'importar' && resultado && (
           <button
             type="button"
             onClick={iniciarNovaImportacao}
@@ -216,7 +223,25 @@ export const ImportarDadosPage: React.FC = () => {
         )}
       </div>
 
-      {erro && (
+      <nav aria-label="Áreas da importação" className="flex w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        {([
+          ['importar', 'Importar', UploadCloud],
+          ['historico', 'Histórico', History],
+          ['gerenciar', 'Gerenciar dados', Database],
+        ] as const).map(([value, label, Icon]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setActiveTab(value)}
+            className={`inline-flex h-9 min-w-max flex-1 items-center justify-center gap-2 rounded-lg px-4 text-xs font-semibold transition-colors ${activeTab === value ? 'bg-indigo-50 text-indigo-700 shadow-2xs dark:bg-indigo-950/60 dark:text-indigo-300' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'}`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === 'importar' && erro && (
         <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-950/40">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
           <div className="flex-1">
@@ -229,7 +254,7 @@ export const ImportarDadosPage: React.FC = () => {
         </div>
       )}
 
-      {!resultado && (
+      {activeTab === 'importar' && !resultado && (
         <>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
@@ -455,7 +480,7 @@ export const ImportarDadosPage: React.FC = () => {
         </>
       )}
 
-      {resultado && (
+      {activeTab === 'importar' && resultado && (
         <>
           <section className={`overflow-hidden rounded-2xl border shadow-2xs ${resultado.naoImportados === 0 ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/20' : 'border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20'}`}>
             <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -591,7 +616,17 @@ export const ImportarDadosPage: React.FC = () => {
         </>
       )}
 
-      {confirmarSubstituicao && (
+      {activeTab === 'historico' && (
+        <HistoricoImportacoes refreshKey={historicoRefreshKey} />
+      )}
+
+      {activeTab === 'gerenciar' && (
+        <GerenciarCompetencia
+          onOperationComplete={() => setHistoricoRefreshKey((value) => value + 1)}
+        />
+      )}
+
+      {activeTab === 'importar' && confirmarSubstituicao && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onMouseDown={() => setConfirmarSubstituicao(false)}>
           <div role="dialog" aria-modal="true" aria-labelledby="titulo-confirmacao-substituicao" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start gap-3">

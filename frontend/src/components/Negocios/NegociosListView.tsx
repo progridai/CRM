@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ExternalLink, MessageCircle } from 'lucide-react';
 import type { EtapaDto, NegocioDto } from '../../services/negociosService';
 import { formatCurrency, getNameInitial } from '../../utils';
+import type { NegociosSort } from '../../types';
 
 interface NegociosListViewProps {
   negocios: NegocioDto[];
   etapas: EtapaDto[];
   onSelectNegocio: (negocio: NegocioDto) => void;
   onUpdateEtapa: (negocioPublicId: string, etapaCodigo: string) => void;
+  sortMode: NegociosSort;
 }
 
 const formatPhone = (phone?: string) => {
@@ -40,7 +42,24 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
   etapas,
   onSelectNegocio,
   onUpdateEtapa,
+  sortMode,
 }) => {
+  const sortedNegocios = useMemo(() => {
+    return [...negocios].sort((first, second) => {
+      if (sortMode === 'value-desc' || sortMode === 'value-asc') {
+        return sortMode === 'value-desc'
+          ? second.valor - first.valor
+          : first.valor - second.valor;
+      }
+
+      const comparison = first.nomeCliente.localeCompare(second.nomeCliente, 'pt-BR', {
+        sensitivity: 'base',
+        numeric: true,
+      });
+      return sortMode === 'name-desc' ? -comparison : comparison;
+    });
+  }, [negocios, sortMode]);
+
   if (negocios.length === 0) {
     return (
       <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-sm text-slate-400 shadow-2xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500">
@@ -66,7 +85,7 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {negocios.map((negocio) => {
+            {sortedNegocios.map((negocio) => {
               const etapaAtual = etapas.find((etapa) => etapa.codigo === negocio.etapaCodigo);
               const stageColor = etapaAtual?.corHex || '#64748b';
               const nomeOperador = negocio.nomeOperador?.trim() || 'Sem responsável';

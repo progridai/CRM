@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Dapper;
 using Npgsql;
@@ -120,6 +121,7 @@ public sealed partial class ImportacaoNegociosServico
         int competenciaAno,
         string modo,
         long usuarioLogadoId,
+        string? usuarioNome,
         CancellationToken ct = default)
     {
         if (competenciaMes is < 1 or > 12)
@@ -131,7 +133,7 @@ public sealed partial class ImportacaoNegociosServico
         if (modo is not ("adicionar" or "substituir"))
             throw new ArgumentException("O modo deve ser 'adicionar' ou 'substituir'.");
 
-        nomeArquivo = Path.GetFileName(nomeArquivo);
+        nomeArquivo = LimitarTexto(Path.GetFileName(nomeArquivo), 255);
         var planilha = PlanilhaXlsxLeitor.Ler(arquivo);
         var logs = new List<ImportacaoNegociosLogDto>();
         var preValidadas = new List<LinhaPreValidada>();
@@ -181,7 +183,23 @@ public sealed partial class ImportacaoNegociosServico
         }
 
         if (preValidadas.Count == 0)
-            return CriarResultado(planilha, nomeArquivo, competenciaMes, competenciaAno, modo, logs, 0, 0m);
+        {
+            var resultadoSemLinhasValidas = CriarResultado(
+                planilha,
+                nomeArquivo,
+                competenciaMes,
+                competenciaAno,
+                modo,
+                logs,
+                0,
+                0m);
+            await RegistrarImportacaoConcluidaAsync(
+                resultadoSemLinhasValidas,
+                usuarioLogadoId,
+                usuarioNome,
+                ct);
+            return resultadoSemLinhasValidas;
+        }
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -343,6 +361,22 @@ public sealed partial class ImportacaoNegociosServico
                     linha.Valor));
             }
 
+            var resultado = CriarResultado(
+                planilha,
+                nomeArquivo,
+                competenciaMes,
+                competenciaAno,
+                modo,
+                logs,
+                substituidos,
+                valorImportado);
+
+            await ImportacaoOperacaoHistoricoStore.InserirAsync(
+                conn,
+                tx,
+                CriarRegistroImportacao(resultado, usuarioLogadoId, usuarioNome),
+                ct);
+
             await tx.CommitAsync(ct);
 
             _logger.LogInformation(
@@ -355,15 +389,7 @@ public sealed partial class ImportacaoNegociosServico
                 planilha.Linhas.Count - validas.Count,
                 substituidos);
 
-            return CriarResultado(
-                planilha,
-                nomeArquivo,
-                competenciaMes,
-                competenciaAno,
-                modo,
-                logs,
-                substituidos,
-                valorImportado);
+            return resultado;
         }
         catch
         {
@@ -371,6 +397,89 @@ public sealed partial class ImportacaoNegociosServico
             throw;
         }
     }
+
+    public async Task RegistrarFalhaAsync(
+        string nomeArquivo,
+        int competenciaMes,
+        int competenciaAno,
+        string modo,
+        long usuarioLogadoId,
+        string? usuarioNome,
+        string mensagem)
+    {
+        if (competenciaMes is < 1 or > 12 || competenciaAno is < 2000 or > 2100)
+            return;
+
+        try
+        {
+            await using var connection = new NpgsqlConnection(_connectionString);
+            await connection.OpenAsync(CancellationToken.None);
+            await ImportacaoOperacaoHistoricoStore.InserirAsync(
+                connection,
+                null,
+                new ImportacaoOperacaoRegistro(
+                    "IMPORTACAO",
+                    competenciaMes,
+                    competenciaAno,
+                    LimitarTexto(Path.GetFileName(nomeArquivo), 255),
+                    usuarioLogadoId,
+                    LimitarTextoNullable(usuarioNome, 200),
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    "ERRO",
+                    LimitarTexto(mensagem, 1000),
+                    JsonSerializer.Serialize(new { modo = LimitarTexto(modo, 30) })),
+                CancellationToken.None);
+        }
+        catch (Exception historyException)
+        {
+            _logger.LogError(historyException, "Não foi possível registrar a falha da importação no histórico operacional.");
+        }
+    }
+
+    private async Task RegistrarImportacaoConcluidaAsync(
+        ImportacaoNegociosResultadoDto resultado,
+        long usuarioLogadoId,
+        string? usuarioNome,
+        CancellationToken ct)
+    {
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        await ImportacaoOperacaoHistoricoStore.InserirAsync(
+            connection,
+            null,
+            CriarRegistroImportacao(resultado, usuarioLogadoId, usuarioNome),
+            ct);
+    }
+
+    private static ImportacaoOperacaoRegistro CriarRegistroImportacao(
+        ImportacaoNegociosResultadoDto resultado,
+        long usuarioLogadoId,
+        string? usuarioNome) =>
+        new(
+            "IMPORTACAO",
+            resultado.CompetenciaMes,
+            resultado.CompetenciaAno,
+            LimitarTexto(resultado.Arquivo, 255),
+            usuarioLogadoId,
+            LimitarTextoNullable(usuarioNome, 200),
+            resultado.TotalLinhas,
+            resultado.Importados,
+            0,
+            resultado.Substituidos,
+            resultado.ValorImportado,
+            "SUCESSO",
+            $"Importação concluída com {resultado.Importados} inserido(s) e {resultado.NaoImportados} não importado(s).",
+            JsonSerializer.Serialize(new
+            {
+                modo = resultado.Modo,
+                abasLidas = resultado.AbasLidas,
+                existentesRemovidos = resultado.Substituidos,
+                naoImportados = resultado.NaoImportados,
+            }));
 
     private static ImportacaoNegociosResultadoDto CriarResultado(
         ImportacaoPlanilhaResultado planilha,
@@ -455,6 +564,15 @@ public sealed partial class ImportacaoNegociosServico
 
     private static string LimparTexto(string value) =>
         EspacosRegex().Replace(value.Trim(), " ");
+
+    private static string LimitarTexto(string? value, int tamanho)
+    {
+        var texto = value?.Trim() ?? string.Empty;
+        return texto[..Math.Min(texto.Length, tamanho)];
+    }
+
+    private static string? LimitarTextoNullable(string? value, int tamanho) =>
+        string.IsNullOrWhiteSpace(value) ? null : LimitarTexto(value, tamanho);
 
     private static string NormalizarNome(string value)
     {

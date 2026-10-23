@@ -62,6 +62,7 @@ builder.Services.AddScoped<ProgridPlus.Api.Negocios.AtividadeAtalhoComando>();
 
 // Importação de planilhas de inadimplência para o Kanban.
 builder.Services.AddScoped<ImportacaoNegociosServico>();
+builder.Services.AddScoped<ImportacaoOperacoesServico>();
 // Authentication via Keycloak JWT Bearer
 var authority = builder.Configuration.GetValue<string>("Authentication:Authority")
     ?? throw new InvalidOperationException("Missing Authentication:Authority");
