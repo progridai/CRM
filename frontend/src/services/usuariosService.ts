@@ -5,6 +5,9 @@ export interface UsuarioBasicoDto {
   nome: string;
   username: string;
   email: string;
+  isActive?: boolean;
+  acessoTotal?: boolean;
+  permissoes?: string[];
 }
 
 export interface UsuarioDto extends UsuarioBasicoDto {

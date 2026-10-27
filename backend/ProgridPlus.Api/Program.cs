@@ -8,6 +8,7 @@ using ProgridPlus.Api.Contatos;
 using ProgridPlus.Api.Data;
 using ProgridPlus.Api.Importacoes;
 using ProgridPlus.Api.Seguranca;
+using ProgridPlus.Api.WhatsApp;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,6 +64,9 @@ builder.Services.AddScoped<ProgridPlus.Api.Negocios.AtividadeAtalhoComando>();
 // Importação de planilhas de inadimplência para o Kanban.
 builder.Services.AddScoped<ImportacaoNegociosServico>();
 builder.Services.AddScoped<ImportacaoOperacoesServico>();
+// Integração WhatsApp/Sisnetsul. A chave é lida somente da configuração do processo.
+builder.Services.AddHttpClient<SisnetsulWhatsAppClient>();
+builder.Services.AddScoped<WhatsAppServico>();
 // Authentication via Keycloak JWT Bearer
 var authority = builder.Configuration.GetValue<string>("Authentication:Authority")
     ?? throw new InvalidOperationException("Missing Authentication:Authority");
@@ -112,6 +116,12 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CrmAcesso", policy =>
         policy.RequireAuthenticatedUser()
               .AddRequirements(new CrmAcessoRequirement()));
+
+    // Enquanto não existe um módulo/permissão próprios no WebApólice, as configurações
+    // técnicas ficam restritas aos perfis que já possuem acesso_total.
+    options.AddPolicy("Administrador", policy =>
+        policy.RequireAuthenticatedUser()
+              .AddRequirements(new CrmAcessoRequirement(exigirAcessoTotal: true)));
 });
 
 var app = builder.Build();

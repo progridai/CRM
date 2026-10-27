@@ -8,7 +8,10 @@ namespace ProgridPlus.Api.Auth;
 /// Marker que representa o requisito de acesso ao CRM.
 /// Registrado como policy "CrmAcesso".
 /// </summary>
-public sealed class CrmAcessoRequirement : IAuthorizationRequirement { }
+public sealed class CrmAcessoRequirement(bool exigirAcessoTotal = false) : IAuthorizationRequirement
+{
+    public bool ExigirAcessoTotal { get; } = exigirAcessoTotal;
+}
 
 /// <summary>
 /// Handler que valida se o usuário autenticado (via JWT Keycloak) possui
@@ -78,6 +81,15 @@ public sealed class CrmAcessoHandler(
         {
             logger.LogWarning(
                 "CrmAcessoHandler: usuário {UsuarioId} não possui crm.acessar nem acesso_total.",
+                acesso.UsuarioId);
+            context.Fail();
+            return;
+        }
+
+        if (requirement.ExigirAcessoTotal && !acesso.AcessoTotal)
+        {
+            logger.LogWarning(
+                "CrmAcessoHandler: usuário {UsuarioId} tentou acessar recurso administrativo sem acesso_total.",
                 acesso.UsuarioId);
             context.Fail();
             return;

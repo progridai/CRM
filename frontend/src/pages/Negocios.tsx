@@ -8,6 +8,7 @@ import { NegociosListView } from '../components/Negocios/NegociosListView';
 import { NovoNegocioModal } from '../components/Negocios/NovoNegocioModal';
 import { NegocioDetalhesDrawer } from '../components/Negocios/NegocioDetalhesDrawer';
 import { QuickActivitiesDrawer } from '../components/Negocios/QuickActivitiesDrawer';
+import { WhatsAppDisparoModal } from '../components/WhatsApp/WhatsAppDisparoModal';
 import {
   DEFAULT_NEGOCIOS_FILTERS,
   filterNegocios,
@@ -29,6 +30,7 @@ export const NegociosPage: React.FC = () => {
   const [modalAberto, setModalAberto] = useState(false);
   const [selectedNegocio, setSelectedNegocio] = useState<NegocioDto | null>(null);
   const [quickActivitiesOpen, setQuickActivitiesOpen] = useState(false);
+  const [whatsAppNegocioIds, setWhatsAppNegocioIds] = useState<string[]>([]);
   const [filters, setFilters] = useState<NegociosFilters>(() => ({
     ...DEFAULT_NEGOCIOS_FILTERS,
     owner: operadorFiltroInicial || DEFAULT_NEGOCIOS_FILTERS.owner,
@@ -150,6 +152,7 @@ export const NegociosPage: React.FC = () => {
           onCardClick={setSelectedNegocio} 
           onDropCard={handleDropCard} 
           onOpenQuickActivitiesManager={() => setQuickActivitiesOpen(true)}
+          onOpenWhatsApp={setWhatsAppNegocioIds}
           onAtividadeRegistrada={carregarDados}
           sortMode={sortMode}
         />
@@ -193,6 +196,14 @@ export const NegociosPage: React.FC = () => {
       <QuickActivitiesDrawer 
         isOpen={quickActivitiesOpen} 
         onClose={() => setQuickActivitiesOpen(false)} 
+      />
+
+      <WhatsAppDisparoModal
+        isOpen={whatsAppNegocioIds.length > 0}
+        negocioIds={whatsAppNegocioIds}
+        tipo="individual"
+        onClose={() => setWhatsAppNegocioIds([])}
+        onCompleted={() => void carregarDados()}
       />
     </div>
   );

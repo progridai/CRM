@@ -5,7 +5,8 @@ $EnvFilePath = Join-Path $BackendPath ".env.local"
 
 $RequiredKeys = @(
     "ASPNETCORE_ENVIRONMENT",
-    "ConnectionStrings__DefaultConnection"
+    "ConnectionStrings__DefaultConnection",
+    "Integracoes__Sisnetsul__ApiKey"
 )
 
 $PublicDefaults = @{
@@ -52,6 +53,22 @@ foreach ($Key in $RequiredKeys) {
 
             if ([string]::IsNullOrWhiteSpace($Value)) {
                 Write-Error "A connection string e obrigatoria."
+                exit 1
+            }
+            $EnvVars[$Key] = $Value
+            $Updated = $true
+        }
+        elseif ($Key -eq "Integracoes__Sisnetsul__ApiKey") {
+            Write-Host ""
+            Write-Host "Configuracao ausente: $Key" -ForegroundColor Yellow
+            $SecureValue = Read-Host "Informe a chave de integracao da Sisnetsul" -AsSecureString
+
+            $BSTR  = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue)
+            $Value = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+
+            if ([string]::IsNullOrWhiteSpace($Value)) {
+                Write-Error "A chave da integracao Sisnetsul e obrigatoria."
                 exit 1
             }
             $EnvVars[$Key] = $Value

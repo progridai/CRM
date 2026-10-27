@@ -12,6 +12,7 @@ interface KanbanBoardProps {
   onCardClick: (negocio: NegocioDto) => void;
   onDropCard: (negocioPublicId: string, novaEtapaCodigo: string) => void;
   onOpenQuickActivitiesManager: () => void;
+  onOpenWhatsApp: (negocioIds: string[]) => void;
   onAtividadeRegistrada?: () => void;
   sortMode: NegociosSort;
 }
@@ -26,7 +27,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCardClick, onDropCard, onOpenQuickActivitiesManager, onAtividadeRegistrada, sortMode }) => {
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCardClick, onDropCard, onOpenQuickActivitiesManager, onOpenWhatsApp, onAtividadeRegistrada, sortMode }) => {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [groupAtividades, setGroupAtividades] = useState<AtividadeDto[]>([]);
   const [loadingAtividades, setLoadingAtividades] = useState(false);
@@ -504,6 +505,23 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                                   )
                                 ) : panelMode === 'menu' ? (
                                   <div className="flex flex-col gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenGroup(null);
+                                        onOpenWhatsApp(grupo.map((negocio) => negocio.publicId));
+                                      }}
+                                      className="flex w-full items-center gap-3 rounded-lg border border-transparent px-2.5 py-2.5 text-left transition-colors hover:border-emerald-200 hover:bg-emerald-50/70 dark:hover:border-emerald-900 dark:hover:bg-emerald-950/30"
+                                    >
+                                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                        <MessageCircle className="h-4 w-4" />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">Enviar mensagem inicial</span>
+                                        <span className="mt-0.5 block text-[10px] text-slate-400">Dispare o template oficial pelo WhatsApp.</span>
+                                      </span>
+                                    </button>
+
                                     <button
                                       type="button"
                                       onClick={() => {

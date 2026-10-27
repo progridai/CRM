@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, Handshake, ShieldCheck, Briefcase, FileUp } from 'lucide-react';
+import { Users, Handshake, ShieldCheck, Briefcase, FileUp, MessageCircle, PlugZap } from 'lucide-react';
+import { useAuth } from '../auth/AuthProvider';
 
 interface SidebarProps {
   negociosCount?: number;
@@ -9,6 +10,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ negociosCount, contactsCount, usersCount }) => {
+  const { user } = useAuth();
+
   return (
     <aside
       id="main-sidebar"
@@ -168,6 +171,53 @@ export const Sidebar: React.FC<SidebarProps> = ({ negociosCount, contactsCount, 
             </>
           )}
         </NavLink>
+
+        {/* WhatsApp — disponível a todos com acesso ao CRM */}
+        <NavLink
+          id="nav-whatsapp"
+          to="/whatsapp"
+          className={({ isActive }) =>
+            `w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all ${
+              isActive
+                ? 'bg-emerald-50/80 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-semibold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/60 font-medium'
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <div className="flex items-center gap-2.5">
+              <MessageCircle className={`w-4 h-4 ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`} />
+              <span>WhatsApp</span>
+            </div>
+          )}
+        </NavLink>
+
+        {user?.isAdmin && (
+          <>
+            <div className="my-2 border-t border-slate-100 dark:border-slate-800" />
+            <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-600">
+              Administração
+            </p>
+            <NavLink
+              id="nav-integracoes"
+              to="/integracoes"
+              className={({ isActive }) =>
+                `w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all ${
+                  isActive
+                    ? 'bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-900/60 font-medium'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <div className="flex items-center gap-2.5">
+                  <PlugZap className={`w-4 h-4 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`} />
+                  <span>Integrações</span>
+                </div>
+              )}
+            </NavLink>
+          </>
+        )}
 
       </nav>
     </aside>

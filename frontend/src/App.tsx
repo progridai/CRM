@@ -7,6 +7,9 @@ import { ContatosPage } from './pages/Contatos';
 import { UsuariosPage } from './pages/Usuarios';
 import { NegociosPage } from './pages/Negocios';
 import { ImportarDadosPage } from './pages/ImportarDados';
+import { WhatsAppPage } from './pages/WhatsApp';
+import { IntegracoesPage } from './pages/Integracoes';
+import { AdminRoute } from './auth/AdminRoute';
 
 function App() {
   return (
@@ -24,7 +27,10 @@ function App() {
               <Route path="/usuarios" element={<UsuariosPage />} />
               <Route path="/negocios" element={<NegociosPage />} />
               <Route path="/importacoes" element={<ImportarDadosPage />} />
-
+              <Route path="/whatsapp" element={<WhatsAppPage />} />
+              <Route element={<AdminRoute />}>
+                <Route path="/integracoes" element={<IntegracoesPage />} />
+              </Route>
             </Route>
           </Route>
 

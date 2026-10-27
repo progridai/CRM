@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { getKeycloakInstance, initKeycloakOnce } from './keycloak';
 import { setTokenProvider } from '../services/api';
+import { obterPerfilLogado } from '../services/usuariosService';
 
 export interface AuthUser {
   id: string;
@@ -8,6 +9,7 @@ export interface AuthUser {
   name: string;
   email: string;
   roles: string[];
+  isAdmin: boolean;
 }
 
 export interface AuthContextValue {
@@ -31,6 +33,7 @@ function extractUser(kc: ReturnType<typeof getKeycloakInstance>): AuthUser | nul
     name: token['name'] ?? [token['given_name'], token['family_name']].filter(Boolean).join(' '),
     email: token['email'] ?? '',
     roles: realmRoles,
+    isAdmin: false,
   };
 }
 
@@ -58,8 +61,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (authenticated) {
           setIsAuthenticated(true);
-          setUser(extractUser(kc));
           setTokenProvider(async () => kc.token);
+          const tokenUser = extractUser(kc);
+          setUser(tokenUser);
+          try {
+            const profile = await obterPerfilLogado();
+            if (mounted && tokenUser) {
+              setUser({
+                ...tokenUser,
+                username: profile.username || tokenUser.username,
+                name: profile.nome || tokenUser.name,
+                email: profile.email || tokenUser.email,
+                isAdmin: profile.acessoTotal === true,
+              });
+            }
+          } catch (profileError) {
+            console.error('Falha ao carregar o perfil local do CRM', profileError);
+          }
         } else {
           setIsAuthenticated(false);
           setTokenProvider(null);
@@ -85,7 +103,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const refreshed = await kc.updateToken(60);
         if (refreshed) {
-          setUser(extractUser(kc));
+          const refreshedUser = extractUser(kc);
+          setUser((current) => refreshedUser
+            ? { ...refreshedUser, isAdmin: current?.isAdmin ?? false }
+            : null);
           setTokenProvider(async () => kc.token);
         }
       } catch {

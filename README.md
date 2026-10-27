@@ -64,6 +64,7 @@ O mecanismo usa um arquivo pessoal `backend/.env.local` (já no `.gitignore`).
 ```env
 ASPNETCORE_ENVIRONMENT=Development
 ConnectionStrings__DefaultConnection=Host=<host>;Port=5432;Database=<database>;Username=<user>;Password=<senha>
+Integracoes__Sisnetsul__ApiKey=<chave-de-integracao>
 ```
 
 > Solicite os valores reais à equipe de infraestrutura.
@@ -227,6 +228,7 @@ Após autorizado, o `UsuarioId` interno (chave primária de `seguranca.usuario`)
 |---------------------------------------|--------------------|----------------------------------------|
 | `ConnectionStrings__DefaultConnection`| `backend/.env.local` | Connection string PostgreSQL         |
 | `ASPNETCORE_ENVIRONMENT`              | `backend/.env.local` | `Development` ou `Production`        |
+| `Integracoes__Sisnetsul__ApiKey`      | `backend/.env.local` | Chave privada da API de WhatsApp     |
 | `VITE_API_BASE_URL`                   | `frontend/.env`    | URL base da API                        |
 | `VITE_KEYCLOAK_URL`                   | `frontend/.env`    | URL do Keycloak                        |
 | `VITE_KEYCLOAK_REALM`                 | `frontend/.env`    | Realm do Keycloak                      |
