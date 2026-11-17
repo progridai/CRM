@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { Loader2, X, Phone, MessageCircle, MessageSquare, Plus, FileText, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { listarAtividades, registrarAtividade, type AtividadeDto, type EtapaDto, type NegocioDto } from '../../services/negociosService';
 import { useQuickActivityTemplates } from '../../hooks/useQuickActivityTemplates';
-import { getNameInitial, getWhatsAppLink } from '../../utils';
+import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
+import { getNameInitial } from '../../utils';
 import type { NegociosSort } from '../../types';
 
 interface KanbanBoardProps {
@@ -28,6 +29,7 @@ const formatCurrency = (value: number) => {
 };
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCardClick, onDropCard, onOpenQuickActivitiesManager, onOpenWhatsApp, onAtividadeRegistrada, sortMode }) => {
+  const { getWhatsAppLink } = useWhatsAppLink();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [groupAtividades, setGroupAtividades] = useState<AtividadeDto[]>([]);
   const [loadingAtividades, setLoadingAtividades] = useState(false);

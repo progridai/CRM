@@ -1,5 +1,10 @@
 import { api } from './api';
 
+export interface WhatsAppAtalhoConfiguracaoDto {
+  ativo: boolean;
+  canal: string;
+}
+
 export interface WhatsAppConfiguracaoDto {
   publicId: string;
   nome: string;
@@ -119,6 +124,11 @@ export interface WhatsAppDisparoDetalheDto {
 
 export async function obterConfiguracaoWhatsApp(): Promise<WhatsAppConfiguracaoDto> {
   const { data } = await api.get<WhatsAppConfiguracaoDto>('/api/integracoes/whatsapp');
+  return data;
+}
+
+export async function obterConfiguracaoAtalhoWhatsApp(): Promise<WhatsAppAtalhoConfiguracaoDto> {
+  const { data } = await api.get<WhatsAppAtalhoConfiguracaoDto>('/api/whatsapp/atalho-configuracao');
   return data;
 }
 

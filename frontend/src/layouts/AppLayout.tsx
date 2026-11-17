@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Header } from '../components/Header';
+import { WhatsAppLinkProvider } from '../providers/WhatsAppLinkProvider';
 
 /**
  * Layout padrão do CRM: Sidebar fixa + Header fixo + área de conteúdo.
@@ -24,25 +25,27 @@ export const AppLayout: React.FC = () => {
   }, [isDarkMode]);
 
   return (
-    <div className="min-h-screen flex transition-colors duration-200 bg-[var(--color-background)] text-[var(--color-text)]">
-      {/* Sidebar fixa à esquerda */}
-      <Sidebar />
+    <WhatsAppLinkProvider>
+      <div className="min-h-screen flex transition-colors duration-200 bg-[var(--color-background)] text-[var(--color-text)]">
+        {/* Sidebar fixa à esquerda */}
+        <Sidebar />
 
-      {/* Área principal com deslocamento à direita da sidebar */}
-      <div className="pl-60 flex-1 flex flex-col min-w-0">
-        {/* Header fixo no topo */}
-        <Header
-          isDarkMode={isDarkMode}
-          onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
-        />
+        {/* Área principal com deslocamento à direita da sidebar */}
+        <div className="pl-60 flex-1 flex flex-col min-w-0">
+          {/* Header fixo no topo */}
+          <Header
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
+          />
 
-        {/* Conteúdo da rota ativa */}
-        <main className="w-full pt-14 px-6 pb-12 min-h-screen transition-colors duration-200">
-          <div className="pt-6">
-            <Outlet />
-          </div>
-        </main>
+          {/* Conteúdo da rota ativa */}
+          <main className="w-full pt-14 px-6 pb-12 min-h-screen transition-colors duration-200">
+            <div className="pt-6">
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </WhatsAppLinkProvider>
   );
 };

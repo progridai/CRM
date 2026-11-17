@@ -30,8 +30,8 @@ public sealed class ImportacoesController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> ImportarNegocios(
         [FromForm] IFormFile arquivo,
-        [FromForm] int competenciaMes,
-        [FromForm] int competenciaAno,
+        [FromForm] int competenciaMesEsperada,
+        [FromForm] int competenciaAnoEsperada,
         [FromForm] string modo,
         CancellationToken ct)
     {
@@ -53,8 +53,8 @@ public sealed class ImportacoesController : ControllerBase
             var resultado = await _servico.ImportarAsync(
                 stream,
                 arquivo.FileName,
-                competenciaMes,
-                competenciaAno,
+                competenciaMesEsperada,
+                competenciaAnoEsperada,
                 modo ?? string.Empty,
                 usuarioLogadoId,
                 ObterUsuarioNome(),
@@ -72,8 +72,8 @@ public sealed class ImportacoesController : ControllerBase
 
             await _servico.RegistrarFalhaAsync(
                 arquivo.FileName,
-                competenciaMes,
-                competenciaAno,
+                competenciaMesEsperada,
+                competenciaAnoEsperada,
                 modo ?? string.Empty,
                 usuarioLogadoId,
                 ObterUsuarioNome(),
@@ -90,6 +90,36 @@ public sealed class ImportacoesController : ControllerBase
 
             _logger.LogError(ex, "Falha inesperada na importação de negócios.");
             return StatusCode(500, new { message = mensagemPublica });
+        }
+    }
+
+    [HttpPost("negocios/analisar")]
+    [RequestSizeLimit(TamanhoMaximoArquivo)]
+    [Consumes("multipart/form-data")]
+    public IActionResult AnalisarPlanilha([FromForm] IFormFile arquivo)
+    {
+        if (arquivo is null || arquivo.Length == 0)
+            return BadRequest(new { message = "Selecione uma planilha XLSX para analisar." });
+
+        if (arquivo.Length > TamanhoMaximoArquivo)
+            return BadRequest(new { message = "A planilha deve ter no máximo 10 MB." });
+
+        if (!string.Equals(Path.GetExtension(arquivo.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Formato inválido. Envie um arquivo com extensão .xlsx." });
+
+        try
+        {
+            using var stream = arquivo.OpenReadStream();
+            return Ok(_servico.Analisar(stream, arquivo.FileName));
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha inesperada ao analisar a planilha de negócios.");
+            return StatusCode(500, new { message = "Não foi possível analisar a planilha." });
         }
     }
 

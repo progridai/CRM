@@ -32,6 +32,27 @@ public sealed partial class WhatsAppServico
         return ParaDto(configuracao);
     }
 
+    public async Task<WhatsAppAtalhoConfiguracaoDto> ObterAtalhoConfiguracaoAsync(
+        CancellationToken ct = default)
+    {
+        const string query = """
+            SELECT
+                i.ativo AS Ativo,
+                w.canal AS Canal
+            FROM crm.integracao i
+            INNER JOIN crm.integracao_whatsapp_configuracao w ON w.integracao_id = i.id
+            WHERE i.codigo = 'sisnetsul_whatsapp'
+            LIMIT 1;
+            """;
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        var configuracao = await connection.QuerySingleOrDefaultAsync<WhatsAppAtalhoConfiguracaoDto>(
+            new CommandDefinition(query, cancellationToken: ct));
+
+        // Mantém o novo atendimento como padrão enquanto não houver configuração persistida.
+        return configuracao ?? new WhatsAppAtalhoConfiguracaoDto(true, "551140002908");
+    }
+
     public async Task<WhatsAppConfiguracaoDto> AtualizarConfiguracaoAsync(
         AtualizarWhatsAppConfiguracaoRequest request,
         long usuarioId,

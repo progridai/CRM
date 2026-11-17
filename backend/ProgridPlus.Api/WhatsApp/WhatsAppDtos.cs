@@ -1,5 +1,9 @@
 namespace ProgridPlus.Api.WhatsApp;
 
+public sealed record WhatsAppAtalhoConfiguracaoDto(
+    bool Ativo,
+    string Canal);
+
 public sealed record WhatsAppConfiguracaoDto(
     Guid PublicId,
     string Nome,

@@ -3,6 +3,7 @@ import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, Credit
 import type { NegocioDto, EtapaDto } from '../../services/negociosService';
 import { DealHistoryTimeline } from './DealHistoryTimeline';
 import { getNameInitial } from '../../utils';
+import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 
 interface NegocioDetalhesDrawerProps {
   negocio: NegocioDto | null;
@@ -26,6 +27,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   onClose,
   onAtividadeRegistrada
 }) => {
+  const { getWhatsAppLink } = useWhatsAppLink();
   const [activeTab, setActiveTab] = useState<'geral' | 'atividades' | 'historico'>('geral');
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
 
@@ -161,7 +163,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
             <div className="flex items-center gap-2">
               {negocio.telefonePrincipal && negocio.telefonePrincipal.trim() && (
                 <a
-                  href={`https://web.whatsapp.com/send?phone=55${negocio.telefonePrincipal.replace(/\D/g, '')}`}
+                  href={getWhatsAppLink(negocio.telefonePrincipal)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold shadow-xs transition-all"
@@ -250,7 +252,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {negocio.telefonePrincipal && negocio.telefonePrincipal.trim() ? (
                       <a 
-                        href={`https://web.whatsapp.com/send?phone=55${negocio.telefonePrincipal.replace(/\D/g, '')}`} 
+                        href={getWhatsAppLink(negocio.telefonePrincipal)}
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors flex items-center gap-1"
@@ -273,12 +275,12 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   </div>
                 </div>
 
-                {/* Contrato / Ref */}
+                {/* Matrícula */}
                 <div className="flex flex-col">
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Contrato / Ref</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Matrícula</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {negocio.referencia ? `#${negocio.referencia}` : '—'}
+                      {negocio.referencia || '—'}
                     </span>
                   </div>
                 </div>
@@ -305,14 +307,6 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   </div>
                 </div>
 
-                {/* Origem */}
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Origem</span>
-                  <span className="text-xs font-medium text-slate-800 dark:text-slate-200 mt-0.5 truncate" title={negocio.origem}>
-                    {negocio.origem || '—'}
-                  </span>
-                </div>
-
                 {/* Responsável Atual */}
                 <div className="flex flex-col">
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Responsável Atual</span>
@@ -325,6 +319,14 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                     </div>
                     <span className="text-xs font-medium text-slate-800 dark:text-slate-200">{nomeOperador}</span>
                   </div>
+                </div>
+
+                {/* Origem */}
+                <div className="col-span-2 flex min-w-0 flex-col">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Origem</span>
+                  <span className="mt-0.5 whitespace-normal break-words text-xs font-medium leading-5 text-slate-800 dark:text-slate-200">
+                    {negocio.origem || '—'}
+                  </span>
                 </div>
 
                 {/* Mudar Etapa do Pipeline */}

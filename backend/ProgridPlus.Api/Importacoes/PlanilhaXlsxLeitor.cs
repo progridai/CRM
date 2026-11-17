@@ -34,6 +34,9 @@ internal static partial class PlanilhaXlsxLeitor
             ["MATRCULA"] = "matricula", // arquivo legado com caractere de acento corrompido
             ["NOME"] = "nome",
             ["CPF"] = "cpf",
+            ["ANO"] = "ano",
+            ["COMPETENCIA"] = "competencia",
+            ["COMPETNCIA"] = "competencia", // arquivo legado com caractere de acento corrompido
             ["SITUACAO"] = "situacao",
             ["SITUAO"] = "situacao", // arquivo legado com caracteres corrompidos
             ["PREMIO"] = "premio",
@@ -41,7 +44,7 @@ internal static partial class PlanilhaXlsxLeitor
         };
 
     private static readonly string[] Obrigatorios =
-        ["estipulante", "matricula", "nome", "cpf", "situacao", "premio", "cobrador"];
+        ["estipulante", "matricula", "nome", "cpf", "competencia", "situacao", "premio", "cobrador"];
 
     public static ImportacaoPlanilhaResultado Ler(Stream stream)
     {
@@ -115,6 +118,11 @@ internal static partial class PlanilhaXlsxLeitor
                     string Valor(string coluna) =>
                         valores.TryGetValue(header.Columns[coluna], out var valor) ? valor.Trim() : string.Empty;
 
+                    string ValorOpcional(string coluna) =>
+                        header.Columns.TryGetValue(coluna, out var indice) && valores.TryGetValue(indice, out var valor)
+                            ? valor.Trim()
+                            : string.Empty;
+
                     linhas.Add(new ImportacaoPlanilhaLinha(
                         ++ordem,
                         nome,
@@ -123,6 +131,8 @@ internal static partial class PlanilhaXlsxLeitor
                         Valor("matricula"),
                         Valor("nome"),
                         Valor("cpf"),
+                        ValorOpcional("ano"),
+                        Valor("competencia"),
                         Valor("situacao"),
                         Valor("premio"),
                         Valor("cobrador")));
@@ -132,13 +142,14 @@ internal static partial class PlanilhaXlsxLeitor
             if (abasLidas.Count == 0)
             {
                 throw new InvalidDataException(
-                    "Nenhuma aba possui todas as colunas obrigatórias: Estipulante, Matrícula, Nome, CPF, Situação, Prêmio e Cobrador.");
+                    "Nenhuma aba possui todas as colunas obrigatórias: Estipulante, Matrícula, Nome, CPF, Competência, Situação, Prêmio e Cobrador.");
             }
 
             if (linhas.Count == 0)
                 throw new InvalidDataException("As abas reconhecidas não possuem linhas para importação.");
 
-            return new ImportacaoPlanilhaResultado(abasLidas, linhas);
+            var (competenciaMes, competenciaAno) = ObterCompetenciaUnica(linhas);
+            return new ImportacaoPlanilhaResultado(abasLidas, linhas, competenciaMes, competenciaAno);
         }
         catch (InvalidDataException)
         {
@@ -149,6 +160,92 @@ internal static partial class PlanilhaXlsxLeitor
             throw new InvalidDataException("O arquivo não é um XLSX válido ou está corrompido.", ex);
         }
     }
+
+    private static (int Mes, int Ano) ObterCompetenciaUnica(
+        IReadOnlyList<ImportacaoPlanilhaLinha> linhas)
+    {
+        var competencias = new HashSet<(int Mes, int Ano)>();
+
+        foreach (var linha in linhas)
+        {
+            if (!TentarLerCompetencia(linha.Competencia, linha.Ano, out var mes, out var ano))
+            {
+                throw new InvalidDataException(
+                    $"Competência inválida na aba \"{linha.Aba}\", linha {linha.Linha}. " +
+                    "Informe o mês na coluna Competência e o ano na coluna Ano, ou use o formato MM/AAAA em Competência.");
+            }
+
+            competencias.Add((mes, ano));
+        }
+
+        if (competencias.Count > 1)
+        {
+            var periodos = string.Join(", ", competencias
+                .OrderBy(item => item.Ano)
+                .ThenBy(item => item.Mes)
+                .Select(item => $"{item.Mes:D2}/{item.Ano:D4}"));
+            throw new InvalidDataException(
+                $"A planilha contém mais de uma competência ({periodos}). Envie um arquivo com apenas uma competência por importação.");
+        }
+
+        return competencias.Single();
+    }
+
+    private static bool TentarLerCompetencia(
+        string competenciaRaw,
+        string anoRaw,
+        out int mes,
+        out int ano)
+    {
+        mes = 0;
+        ano = 0;
+        competenciaRaw = competenciaRaw.Trim();
+        anoRaw = anoRaw.Trim();
+
+        var periodo = PeriodoRegex().Match(competenciaRaw);
+        if (periodo.Success)
+        {
+            mes = int.Parse(periodo.Groups["mes"].Value, CultureInfo.InvariantCulture);
+            ano = int.Parse(periodo.Groups["ano"].Value, CultureInfo.InvariantCulture);
+            return CompetenciaValida(mes, ano);
+        }
+
+        var periodoInvertido = PeriodoInvertidoRegex().Match(competenciaRaw);
+        if (periodoInvertido.Success)
+        {
+            mes = int.Parse(periodoInvertido.Groups["mes"].Value, CultureInfo.InvariantCulture);
+            ano = int.Parse(periodoInvertido.Groups["ano"].Value, CultureInfo.InvariantCulture);
+            return CompetenciaValida(mes, ano);
+        }
+
+        if (competenciaRaw.Length == 6 && int.TryParse(competenciaRaw, out var competenciaInt))
+        {
+            ano = competenciaInt / 100;
+            mes = competenciaInt % 100;
+            return CompetenciaValida(mes, ano);
+        }
+
+        return TentarLerInteiroExcel(competenciaRaw, out mes)
+            && TentarLerInteiroExcel(anoRaw, out ano)
+            && CompetenciaValida(mes, ano);
+    }
+
+    private static bool TentarLerInteiroExcel(string raw, out int valor)
+    {
+        valor = 0;
+        if (!decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var numero) ||
+            numero != decimal.Truncate(numero) ||
+            numero < int.MinValue || numero > int.MaxValue)
+        {
+            return false;
+        }
+
+        valor = decimal.ToInt32(numero);
+        return true;
+    }
+
+    private static bool CompetenciaValida(int mes, int ano) =>
+        mes is >= 1 and <= 12 && ano is >= 2000 and <= 2100;
 
     private static HeaderInfo? EncontrarCabecalho(
         IReadOnlyList<XElement> rows,
@@ -279,6 +376,12 @@ internal static partial class PlanilhaXlsxLeitor
         }
         return builder.ToString();
     }
+
+    [GeneratedRegex(@"^(?<mes>\d{1,2})\s*[/\-.]\s*(?<ano>\d{4})$", RegexOptions.CultureInvariant)]
+    private static partial Regex PeriodoRegex();
+
+    [GeneratedRegex(@"^(?<ano>\d{4})\s*[/\-.]\s*(?<mes>\d{1,2})$", RegexOptions.CultureInvariant)]
+    private static partial Regex PeriodoInvertidoRegex();
 
     private sealed record HeaderInfo(
         int RowIndex,

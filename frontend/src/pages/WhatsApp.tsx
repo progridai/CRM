@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock3, Eye, History, Loader2, MessageCircle, RefreshCw, Search, Send, Users, X, XCircle } from 'lucide-react';
-import { listarNegocios, type NegocioDto } from '../services/negociosService';
+import { listarEtapas, listarNegocios, type EtapaDto, type NegocioDto } from '../services/negociosService';
 import {
   listarDisparosWhatsApp,
   obterDisparoWhatsApp,
@@ -26,10 +26,12 @@ const formatCompetencia = (negocio: NegocioDto) =>
 export const WhatsAppPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'novo' | 'historico'>('novo');
   const [negocios, setNegocios] = useState<NegocioDto[]>([]);
+  const [etapas, setEtapas] = useState<EtapaDto[]>([]);
   const [disparos, setDisparos] = useState<WhatsAppDisparoResumoDto[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [operator, setOperator] = useState('todos');
+  const [stage, setStage] = useState('todas');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,12 +42,14 @@ export const WhatsAppPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [negociosData, disparosData] = await Promise.all([
+      const [negociosData, disparosData, etapasData] = await Promise.all([
         listarNegocios(),
         listarDisparosWhatsApp(),
+        listarEtapas(),
       ]);
       setNegocios(negociosData);
       setDisparos(disparosData);
+      setEtapas(etapasData);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -59,15 +63,31 @@ export const WhatsAppPage: React.FC = () => {
     negocios.map((item) => item.nomeOperador?.trim()).filter((name): name is string => Boolean(name)),
   )).sort((a, b) => a.localeCompare(b, 'pt-BR')), [negocios]);
 
+  const stageCounts = useMemo(() => negocios.reduce<Record<string, number>>((counts, item) => {
+    counts[item.etapaCodigo] = (counts[item.etapaCodigo] ?? 0) + 1;
+    return counts;
+  }, {}), [negocios]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR');
     return negocios.filter((item) => {
+      const matchesStage = stage === 'todas' || item.etapaCodigo === stage;
       const matchesOperator = operator === 'todos' || item.nomeOperador === operator;
       const matchesSearch = !term || [item.nomeCliente, item.documento, item.telefonePrincipal, item.referencia]
         .some((value) => value?.toLocaleLowerCase('pt-BR').includes(term));
-      return matchesOperator && matchesSearch;
+      return matchesStage && matchesOperator && matchesSearch;
     });
-  }, [negocios, operator, search]);
+  }, [negocios, operator, search, stage]);
+
+  const changeStage = (value: string) => {
+    setStage(value);
+    setSelectedIds([]);
+  };
+
+  const changeOperator = (value: string) => {
+    setOperator(value);
+    setSelectedIds([]);
+  };
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.publicId));
   const toggleVisible = () => {
@@ -110,10 +130,11 @@ export const WhatsAppPage: React.FC = () => {
       ) : activeTab === 'novo' ? (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 dark:border-slate-800 lg:flex-row lg:items-center lg:justify-between">
-            <div><h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Selecionar negócios</h2><p className="mt-0.5 text-[11px] text-slate-500">Telefones repetidos serão enviados uma única vez.</p></div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative sm:w-72"><Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, documento ou telefone" className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" /></div>
-              <select value={operator} onChange={(e) => setOperator(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="todos">Todos os operadores</option>{operators.map((name) => <option key={name} value={name}>{name}</option>)}</select>
+            <div><h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Selecionar negócios</h2><p className="mt-0.5 text-[11px] text-slate-500">Escolha uma fila do Kanban. Telefones repetidos serão enviados uma única vez.</p></div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_190px_190px]">
+              <div className="relative sm:col-span-2 lg:col-span-1"><Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, documento ou telefone" className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" /></div>
+              <select aria-label="Filtrar por fila do Kanban" value={stage} onChange={(e) => changeStage(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="todas">Todas as filas ({negocios.length})</option>{etapas.map((etapa) => <option key={etapa.publicId} value={etapa.codigo}>{etapa.nome} ({stageCounts[etapa.codigo] ?? 0})</option>)}</select>
+              <select aria-label="Filtrar por operador" value={operator} onChange={(e) => changeOperator(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="todos">Todos os operadores</option>{operators.map((name) => <option key={name} value={name}>{name}</option>)}</select>
             </div>
           </div>
 

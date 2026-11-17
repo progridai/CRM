@@ -13,6 +13,13 @@ public sealed record ImportacaoNegociosResultadoDto(
     decimal ValorImportado,
     IReadOnlyList<ImportacaoNegociosLogDto> Logs);
 
+public sealed record ImportacaoPlanilhaAnaliseDto(
+    string Arquivo,
+    int CompetenciaMes,
+    int CompetenciaAno,
+    IReadOnlyList<string> AbasLidas,
+    int TotalLinhas);
+
 public sealed record ImportacaoNegociosLogDto(
     int Ordem,
     string Aba,
@@ -62,10 +69,14 @@ internal sealed record ImportacaoPlanilhaLinha(
     string Matricula,
     string Nome,
     string Cpf,
+    string Ano,
+    string Competencia,
     string Situacao,
     string Premio,
     string Cobrador);
 
 internal sealed record ImportacaoPlanilhaResultado(
     IReadOnlyList<string> AbasLidas,
-    IReadOnlyList<ImportacaoPlanilhaLinha> Linhas);
+    IReadOnlyList<ImportacaoPlanilhaLinha> Linhas,
+    int CompetenciaMes,
+    int CompetenciaAno);

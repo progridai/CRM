@@ -29,11 +29,24 @@ export interface ImportacaoNegociosResultadoDto {
   logs: ImportacaoNegociosLogDto[];
 }
 
-export interface ImportarNegociosParametros {
-  arquivo: File;
+export interface ImportacaoPlanilhaAnaliseDto {
+  arquivo: string;
   competenciaMes: number;
   competenciaAno: number;
+  abasLidas: string[];
+  totalLinhas: number;
+}
+
+export interface ImportarNegociosParametros {
+  arquivo: File;
+  competenciaMesEsperada: number;
+  competenciaAnoEsperada: number;
   modo: ModoImportacao;
+  onProgress?: (percentual: number) => void;
+}
+
+export interface AnalisarPlanilhaParametros {
+  arquivo: File;
   onProgress?: (percentual: number) => void;
 }
 
@@ -78,12 +91,34 @@ export async function importarNegocios(
 ): Promise<ImportacaoNegociosResultadoDto> {
   const formData = new FormData();
   formData.append('arquivo', parametros.arquivo);
-  formData.append('competenciaMes', String(parametros.competenciaMes));
-  formData.append('competenciaAno', String(parametros.competenciaAno));
+  formData.append('competenciaMesEsperada', String(parametros.competenciaMesEsperada));
+  formData.append('competenciaAnoEsperada', String(parametros.competenciaAnoEsperada));
   formData.append('modo', parametros.modo);
 
   const { data } = await api.post<ImportacaoNegociosResultadoDto>(
     '/api/importacoes/negocios',
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (event) => {
+        if (!parametros.onProgress || !event.total) return;
+        parametros.onProgress(Math.min(95, Math.round((event.loaded / event.total) * 100)));
+      },
+    },
+  );
+
+  parametros.onProgress?.(100);
+  return data;
+}
+
+export async function analisarPlanilhaNegocios(
+  parametros: AnalisarPlanilhaParametros,
+): Promise<ImportacaoPlanilhaAnaliseDto> {
+  const formData = new FormData();
+  formData.append('arquivo', parametros.arquivo);
+
+  const { data } = await api.post<ImportacaoPlanilhaAnaliseDto>(
+    '/api/importacoes/negocios/analisar',
     formData,
     {
       headers: { 'Content-Type': 'multipart/form-data' },

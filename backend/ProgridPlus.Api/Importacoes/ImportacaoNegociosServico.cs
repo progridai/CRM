@@ -114,20 +114,32 @@ public sealed partial class ImportacaoNegociosServico
         );
         """;
 
+    public ImportacaoPlanilhaAnaliseDto Analisar(
+        Stream arquivo,
+        string nomeArquivo)
+    {
+        nomeArquivo = LimitarTexto(Path.GetFileName(nomeArquivo), 255);
+        var planilha = PlanilhaXlsxLeitor.Ler(arquivo);
+        return new ImportacaoPlanilhaAnaliseDto(
+            nomeArquivo,
+            planilha.CompetenciaMes,
+            planilha.CompetenciaAno,
+            planilha.AbasLidas,
+            planilha.Linhas.Count);
+    }
+
     public async Task<ImportacaoNegociosResultadoDto> ImportarAsync(
         Stream arquivo,
         string nomeArquivo,
-        int competenciaMes,
-        int competenciaAno,
+        int competenciaMesEsperada,
+        int competenciaAnoEsperada,
         string modo,
         long usuarioLogadoId,
         string? usuarioNome,
         CancellationToken ct = default)
     {
-        if (competenciaMes is < 1 or > 12)
-            throw new ArgumentException("O mês de competência deve estar entre 1 e 12.");
-        if (competenciaAno is < 2000 or > 2100)
-            throw new ArgumentException("O ano de competência deve estar entre 2000 e 2100.");
+        if (competenciaMesEsperada is < 1 or > 12 || competenciaAnoEsperada is < 2000 or > 2100)
+            throw new ArgumentException("Analise a planilha novamente antes de importar.");
 
         modo = modo.Trim().ToLowerInvariant();
         if (modo is not ("adicionar" or "substituir"))
@@ -135,6 +147,13 @@ public sealed partial class ImportacaoNegociosServico
 
         nomeArquivo = LimitarTexto(Path.GetFileName(nomeArquivo), 255);
         var planilha = PlanilhaXlsxLeitor.Ler(arquivo);
+        var competenciaMes = planilha.CompetenciaMes;
+        var competenciaAno = planilha.CompetenciaAno;
+        if (competenciaMes != competenciaMesEsperada || competenciaAno != competenciaAnoEsperada)
+        {
+            throw new InvalidOperationException(
+                "A competência da planilha mudou desde a análise. Analise o arquivo novamente antes de importar.");
+        }
         var logs = new List<ImportacaoNegociosLogDto>();
         var preValidadas = new List<LinhaPreValidada>();
 

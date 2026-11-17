@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ExternalLink, MessageCircle } from 'lucide-react';
 import type { EtapaDto, NegocioDto } from '../../services/negociosService';
 import { formatCurrency, getNameInitial } from '../../utils';
+import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 import type { NegociosSort } from '../../types';
 
 interface NegociosListViewProps {
@@ -28,12 +29,6 @@ const formatDocument = (document?: string) => {
   return document;
 };
 
-const getWhatsAppUrl = (phone: string) => {
-  const digits = phone.replace(/\D/g, '');
-  const internationalNumber = digits.startsWith('55') ? digits : `55${digits}`;
-  return `https://wa.me/${internationalNumber}`;
-};
-
 const withOpacity = (color: string, opacity: string) =>
   /^#[0-9a-f]{6}$/i.test(color) ? `${color}${opacity}` : color;
 
@@ -44,6 +39,7 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
   onUpdateEtapa,
   sortMode,
 }) => {
+  const { getWhatsAppLink } = useWhatsAppLink();
   const sortedNegocios = useMemo(() => {
     return [...negocios].sort((first, second) => {
       if (sortMode === 'value-desc' || sortMode === 'value-asc') {
@@ -112,7 +108,7 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
                   <td className="p-3">
                     {negocio.telefonePrincipal ? (
                       <a
-                        href={getWhatsAppUrl(negocio.telefonePrincipal)}
+                        href={getWhatsAppLink(negocio.telefonePrincipal)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(event) => event.stopPropagation()}

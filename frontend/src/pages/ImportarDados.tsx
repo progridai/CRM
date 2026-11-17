@@ -1,7 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   Database,
@@ -23,18 +25,16 @@ import {
 import { GerenciarCompetencia } from '../components/Importacoes/GerenciarCompetencia';
 import { HistoricoImportacoes } from '../components/Importacoes/HistoricoImportacoes';
 import {
+  analisarPlanilhaNegocios,
   importarNegocios,
   type ImportacaoNegociosResultadoDto,
+  type ImportacaoPlanilhaAnaliseDto,
   type ModoImportacao,
   type StatusLogImportacao,
 } from '../services/importacoesService';
 import { formatCurrency } from '../utils';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const DATA_ATUAL = new Date();
-const MES_ATUAL = DATA_ATUAL.getMonth() + 1;
-const ANO_ATUAL = DATA_ATUAL.getFullYear();
-const ANOS_DISPONIVEIS = Array.from({ length: 7 }, (_, index) => ANO_ATUAL - 3 + index);
 
 const MESES = [
   'Janeiro',
@@ -52,6 +52,7 @@ const MESES = [
 ];
 
 const MAPEAMENTOS = [
+  ['Ano + Competência', 'Competência do negócio'],
   ['Estipulante', 'Origem'],
   ['Matrícula', 'Referência'],
   ['CPF', 'Contato'],
@@ -73,10 +74,10 @@ function csvCell(value: unknown): string {
 export const ImportarDadosPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [competenciaMes, setCompetenciaMes] = useState(MES_ATUAL);
-  const [competenciaAno, setCompetenciaAno] = useState(ANO_ATUAL);
+  const [analise, setAnalise] = useState<ImportacaoPlanilhaAnaliseDto | null>(null);
   const [modo, setModo] = useState<ModoImportacao>('adicionar');
   const [arrastando, setArrastando] = useState(false);
+  const [analisando, setAnalisando] = useState(false);
   const [importando, setImportando] = useState(false);
   const [progresso, setProgresso] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
@@ -102,6 +103,8 @@ export const ImportarDadosPage: React.FC = () => {
   const selecionarArquivo = (file: File | undefined) => {
     setErro(null);
     setResultado(null);
+    setAnalise(null);
+    setModo('adicionar');
     if (!file) return;
 
     if (!file.name.toLocaleLowerCase('pt-BR').endsWith('.xlsx')) {
@@ -119,9 +122,37 @@ export const ImportarDadosPage: React.FC = () => {
     setArquivo(file);
   };
 
-  const executarImportacao = async () => {
+  const analisarPlanilha = async () => {
     if (!arquivo) {
-      setErro('Selecione a planilha que deseja importar.');
+      setErro('Selecione a planilha que deseja analisar.');
+      return;
+    }
+
+    setAnalisando(true);
+    setProgresso(4);
+    setErro(null);
+    setAnalise(null);
+
+    try {
+      const response = await analisarPlanilhaNegocios({
+        arquivo,
+        onProgress: setProgresso,
+      });
+      setAnalise(response);
+    } catch (requestError: any) {
+      setErro(
+        requestError?.response?.data?.message
+          ?? 'Não foi possível analisar a planilha. Verifique o arquivo e tente novamente.',
+      );
+    } finally {
+      setAnalisando(false);
+      setProgresso(0);
+    }
+  };
+
+  const executarImportacao = async () => {
+    if (!arquivo || !analise) {
+      setErro('Analise a planilha antes de confirmar a importação.');
       return;
     }
 
@@ -134,8 +165,8 @@ export const ImportarDadosPage: React.FC = () => {
     try {
       const response = await importarNegocios({
         arquivo,
-        competenciaMes,
-        competenciaAno,
+        competenciaMesEsperada: analise.competenciaMes,
+        competenciaAnoEsperada: analise.competenciaAno,
         modo,
         onProgress: setProgresso,
       });
@@ -155,8 +186,8 @@ export const ImportarDadosPage: React.FC = () => {
   };
 
   const solicitarImportacao = () => {
-    if (!arquivo) {
-      setErro('Selecione a planilha que deseja importar.');
+    if (!arquivo || !analise) {
+      setErro('Analise a planilha antes de confirmar a importação.');
       return;
     }
     if (modo === 'substituir') {
@@ -190,6 +221,7 @@ export const ImportarDadosPage: React.FC = () => {
 
   const iniciarNovaImportacao = () => {
     setArquivo(null);
+    setAnalise(null);
     setResultado(null);
     setErro(null);
     setModo('adicionar');
@@ -245,7 +277,7 @@ export const ImportarDadosPage: React.FC = () => {
         <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-950/40">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-rose-800 dark:text-rose-200">Não foi possível importar</p>
+            <p className="text-sm font-semibold text-rose-800 dark:text-rose-200">Não foi possível continuar</p>
             <p className="mt-0.5 text-xs text-rose-700 dark:text-rose-300">{erro}</p>
           </div>
           <button type="button" onClick={() => setErro(null)} aria-label="Fechar aviso">
@@ -256,14 +288,15 @@ export const ImportarDadosPage: React.FC = () => {
 
       {activeTab === 'importar' && !resultado && (
         <>
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+          <div className="mx-auto w-full max-w-3xl">
+            {!analise && (
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
               <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
                 <div className="flex items-center gap-3">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 font-display text-sm font-extrabold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">1</span>
                   <div>
-                    <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Selecione a planilha</h2>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Arquivo Excel .xlsx de até 10 MB</p>
+                    <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Envie e analise a planilha</h2>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">O sistema lê a competência antes de importar</p>
                   </div>
                 </div>
               </div>
@@ -317,7 +350,7 @@ export const ImportarDadosPage: React.FC = () => {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                          <FileCheck2 className="h-3.5 w-3.5" /> Arquivo pronto
+                          <FileCheck2 className="h-3.5 w-3.5" /> {analise ? 'Planilha analisada' : 'Arquivo selecionado'}
                         </div>
                         <p className="mt-1.5 truncate font-display text-sm font-bold text-slate-900 dark:text-slate-100" title={arquivo.name}>
                           {arquivo.name}
@@ -328,6 +361,8 @@ export const ImportarDadosPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setArquivo(null);
+                          setAnalise(null);
+                          setModo('adicionar');
                           if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
                         className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white hover:text-rose-600 dark:hover:bg-slate-900"
@@ -344,6 +379,31 @@ export const ImportarDadosPage: React.FC = () => {
                         </p>
                       </div>
                     </div>
+                    {!analise && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void analisarPlanilha()}
+                          disabled={analisando}
+                          className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white shadow-sm shadow-indigo-600/20 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
+                        >
+                          {analisando ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                          {analisando ? 'Analisando planilha…' : 'Analisar planilha'}
+                          {!analisando && <ArrowRight className="h-4 w-4" />}
+                        </button>
+                        {analisando && (
+                          <div className="mt-3">
+                            <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium text-slate-500">
+                              <span>{progresso < 100 ? 'Enviando arquivo' : 'Lendo competência e linhas'}</span>
+                              <span>{progresso}%</span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                              <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${Math.max(4, progresso)}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -355,45 +415,60 @@ export const ImportarDadosPage: React.FC = () => {
                 )}
               </div>
             </section>
+            )}
 
+            {analise && (
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
               <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 font-display text-sm font-extrabold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">2</span>
-                  <div>
-                    <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Configure a importação</h2>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Defina a competência e como tratar os dados existentes</p>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 font-display text-sm font-extrabold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">2</span>
+                    <div>
+                      <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Revise e confirme</h2>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">Confira a competência encontrada e escolha como importar</p>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAnalise(null);
+                      setModo('adicionar');
+                      setErro(null);
+                    }}
+                    disabled={importando}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[11px] font-semibold text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" /> Voltar
+                  </button>
                 </div>
               </div>
 
               <div className="flex flex-col gap-5 p-5">
-                <div>
-                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Competência dos negócios
-                  </label>
-                  <div className="grid grid-cols-[1fr_112px] gap-3">
-                    <select
-                      id="competencia-mes"
-                      value={competenciaMes}
-                      onChange={(event) => setCompetenciaMes(Number(event.target.value))}
-                      className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none transition-colors focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                    >
-                      {MESES.map((mes, index) => <option key={mes} value={index + 1}>{mes}</option>)}
-                    </select>
-                    <select
-                      id="competencia-ano"
-                      value={competenciaAno}
-                      onChange={(event) => setCompetenciaAno(Number(event.target.value))}
-                      className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 outline-none transition-colors focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                    >
-                      {ANOS_DISPONIVEIS.map((ano) => <option key={ano} value={ano}>{ano}</option>)}
-                    </select>
+                  <div>
+                    <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Competência encontrada na planilha
+                    </span>
+                    <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 dark:border-indigo-800 dark:bg-indigo-950/30">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                          <CalendarDays className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <p className="font-display text-base font-extrabold text-indigo-950 dark:text-indigo-100">
+                            {MESES[analise.competenciaMes - 1]} de {analise.competenciaAno}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-indigo-700 dark:text-indigo-300">
+                            {analise.totalLinhas} {analise.totalLinhas === 1 ? 'linha' : 'linhas'} · {analise.abasLidas.length} {analise.abasLidas.length === 1 ? 'aba reconhecida' : 'abas reconhecidas'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-1.5 text-[10px] leading-4 text-slate-400">
+                      A competência foi lida do Excel e será validada novamente no momento da importação.
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-[10px] text-slate-400">A competência selecionada prevalece sobre os campos de mês e ano da planilha.</p>
-                </div>
 
-                <div>
+                  <div>
                   <span className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Tratamento da competência
                   </span>
@@ -434,20 +509,20 @@ export const ImportarDadosPage: React.FC = () => {
                       </span>
                     </button>
                   </div>
-                </div>
+                  </div>
 
-                <button
+                  <button
                   type="button"
                   onClick={solicitarImportacao}
-                  disabled={!arquivo || importando}
+                  disabled={importando}
                   className="mt-1 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white shadow-sm shadow-indigo-600/20 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
                 >
                   {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
                   {importando ? 'Validando e importando…' : 'Importar planilha'}
                   {!importando && <ArrowRight className="h-4 w-4" />}
-                </button>
+                  </button>
 
-                {importando && (
+                  {importando && (
                   <div>
                     <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium text-slate-500">
                       <span>{progresso < 100 ? 'Enviando arquivo' : 'Processando linhas e vínculos'}</span>
@@ -457,9 +532,10 @@ export const ImportarDadosPage: React.FC = () => {
                       <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${Math.max(4, progresso)}%` }} />
                     </div>
                   </div>
-                )}
+                  )}
               </div>
             </section>
+            )}
           </div>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
@@ -626,7 +702,7 @@ export const ImportarDadosPage: React.FC = () => {
         />
       )}
 
-      {activeTab === 'importar' && confirmarSubstituicao && (
+      {activeTab === 'importar' && confirmarSubstituicao && analise && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onMouseDown={() => setConfirmarSubstituicao(false)}>
           <div role="dialog" aria-modal="true" aria-labelledby="titulo-confirmacao-substituicao" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start gap-3">
@@ -636,7 +712,7 @@ export const ImportarDadosPage: React.FC = () => {
               <div>
                 <h2 id="titulo-confirmacao-substituicao" className="font-display text-base font-bold text-slate-900 dark:text-slate-100">Substituir a competência?</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">
-                  Os negócios ativos de <strong>{MESES[competenciaMes - 1]} de {competenciaAno}</strong> serão desativados e somente as linhas válidas desta planilha serão recriadas.
+                  Os negócios ativos de <strong>{MESES[analise.competenciaMes - 1]} de {analise.competenciaAno}</strong> serão desativados e somente as linhas válidas desta planilha serão recriadas.
                 </p>
               </div>
             </div>

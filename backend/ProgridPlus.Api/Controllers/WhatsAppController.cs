@@ -12,6 +12,13 @@ public sealed class WhatsAppController(
     WhatsAppServico whatsAppServico,
     ILogger<WhatsAppController> logger) : ControllerBase
 {
+    [HttpGet("atalho-configuracao")]
+    public async Task<ActionResult<WhatsAppAtalhoConfiguracaoDto>> ObterAtalhoConfiguracao(
+        CancellationToken ct)
+    {
+        return Ok(await whatsAppServico.ObterAtalhoConfiguracaoAsync(ct));
+    }
+
     [HttpGet("disparos")]
     public async Task<ActionResult<IReadOnlyList<WhatsAppDisparoResumoDto>>> ListarDisparos(
         [FromQuery] int limite = 100,

@@ -6,6 +6,7 @@ import type { ContatoDto } from '../services/contatosService';
 import { formatCurrency } from '../utils';
 import { GerenciarTelefonesModal } from '../components/Contatos/GerenciarTelefonesModal';
 import { getWebApoliceClienteUrl } from '../config/webApolice';
+import { useWhatsAppLink } from '../hooks/useWhatsAppLink';
 
 // ─── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -40,12 +41,6 @@ function formatTelefone(tel: string): string {
   return tel;
 }
 
-function getWhatsAppLink(tel: string): string {
-  const digits = tel.replace(/\D/g, '');
-  const internationalNumber = digits.startsWith('55') ? digits : `55${digits}`;
-  return `https://wa.me/${internationalNumber}`;
-}
-
 function withOpacity(color: string, opacity: string): string {
   return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${opacity}` : color;
 }
@@ -68,6 +63,7 @@ const DEBOUNCE_MS    = 350;
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export const ContatosPage: React.FC = () => {
+  const { getWhatsAppLink } = useWhatsAppLink();
   const [searchParams] = useSearchParams();
   const buscaInicial = searchParams.get('busca')?.trim() ?? '';
   const [busca, setBusca]           = useState(buscaInicial);
