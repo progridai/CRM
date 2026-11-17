@@ -134,6 +134,121 @@ public sealed class ContatosConsulta
            );
         """;
 
+    private const string QueryBuscaRapida = """
+        WITH correspondencias AS (
+            SELECT
+                cl.id AS ClienteId,
+                cl.public_id AS ClientePublicId,
+                p.id AS PessoaId,
+                p.nome AS Nome,
+                p.documento_principal AS Documento,
+                p.tipo_pessoa AS TipoPessoa,
+                CASE
+                    WHEN p.nome_normalizado ILIKE @busca || '%' THEN 0
+                    ELSE 2
+                END AS Relevancia
+            FROM core.pessoa p
+            INNER JOIN cadastro.cliente cl ON cl.pessoa_id = p.id
+            WHERE p.deleted_at IS NULL
+              AND p.nome_normalizado ILIKE '%' || @busca || '%'
+
+            UNION ALL
+
+            SELECT
+                cl.id,
+                cl.public_id,
+                p.id,
+                p.nome,
+                p.documento_principal,
+                p.tipo_pessoa,
+                CASE
+                    WHEN p.documento_principal_limpo = @buscaDigitos THEN 0
+                    WHEN p.documento_principal_limpo LIKE @buscaDigitos || '%' THEN 1
+                    ELSE 2
+                END
+            FROM core.pessoa p
+            INNER JOIN cadastro.cliente cl ON cl.pessoa_id = p.id
+            WHERE @buscaDigitos <> ''
+              AND p.deleted_at IS NULL
+              AND p.documento_principal_limpo LIKE '%' || @buscaDigitos || '%'
+
+            UNION ALL
+
+            SELECT
+                cl.id,
+                cl.public_id,
+                p.id,
+                p.nome,
+                p.documento_principal,
+                p.tipo_pessoa,
+                CASE
+                    WHEN pc.valor_normalizado = @buscaDigitos THEN 0
+                    WHEN pc.valor_normalizado LIKE @buscaDigitos || '%' THEN 1
+                    ELSE 2
+                END
+            FROM core.pessoa_contato pc
+            INNER JOIN core.pessoa p
+                ON p.id = pc.pessoa_id
+               AND p.deleted_at IS NULL
+            INNER JOIN cadastro.cliente cl ON cl.pessoa_id = p.id
+            WHERE @buscaDigitos <> ''
+              AND pc.ativo = true
+              AND UPPER(pc.tipo_contato) IN ('CELULAR', 'TELEFONE')
+              AND pc.valor_normalizado LIKE '%' || @buscaDigitos || '%'
+        ),
+        candidatos AS MATERIALIZED (
+            SELECT DISTINCT ON (PessoaId)
+                ClienteId,
+                ClientePublicId,
+                PessoaId,
+                Nome,
+                Documento,
+                TipoPessoa,
+                Relevancia
+            FROM correspondencias
+            ORDER BY PessoaId, Relevancia
+        ),
+        limitados AS MATERIALIZED (
+            SELECT *
+            FROM candidatos
+            ORDER BY Relevancia, Nome, PessoaId
+            LIMIT @limite
+        )
+        SELECT
+            contato.ClientePublicId,
+            contato.PessoaId,
+            contato.Nome,
+            contato.Documento,
+            contato.TipoPessoa,
+            COALESCE(telefones.json, '[]'::jsonb)::text AS TelefonesJson,
+            '' AS Origem,
+            0::numeric AS TotalEmDebito,
+            'Sem negócio' AS StatusGeral,
+            '' AS StatusCodigo,
+            NULL::varchar AS StatusCorHex
+        FROM limitados contato
+        LEFT JOIN LATERAL (
+            SELECT JSONB_AGG(
+                JSONB_BUILD_OBJECT(
+                    'id', pc.id,
+                    'tipo', UPPER(pc.tipo_contato),
+                    'valor', pc.valor,
+                    'principal', pc.principal
+                )
+                ORDER BY
+                    pc.principal DESC,
+                    CASE UPPER(pc.tipo_contato) WHEN 'CELULAR' THEN 0 ELSE 1 END,
+                    pc.id
+            ) AS json
+            FROM core.pessoa_contato pc
+            WHERE pc.pessoa_id = contato.PessoaId
+              AND UPPER(pc.tipo_contato) IN ('CELULAR', 'TELEFONE')
+              AND pc.ativo = true
+              AND NULLIF(BTRIM(pc.valor), '') IS NOT NULL
+        ) telefones ON true
+        ORDER BY contato.Relevancia, contato.Nome, contato.PessoaId;
+        """;
+
     // ─── Método público ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -194,12 +309,13 @@ public sealed class ContatosConsulta
             return [];
 
         limite = Math.Clamp(limite, 1, 20);
+        var buscaDigitos = new string(busca.Where(char.IsDigit).ToArray());
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(ct);
 
         var rows = await connection.QueryAsync<ContatoRow>(new CommandDefinition(
-            QueryContatos,
-            new { busca, tamanhoPagina = limite, offset = 0 },
+            QueryBuscaRapida,
+            new { busca, buscaDigitos, limite },
             cancellationToken: ct));
 
         return rows.Select(MapContato).ToList();

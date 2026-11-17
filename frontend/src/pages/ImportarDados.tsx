@@ -288,7 +288,7 @@ export const ImportarDadosPage: React.FC = () => {
 
       {activeTab === 'importar' && !resultado && (
         <>
-          <div className="mx-auto w-full max-w-3xl">
+          <div className="w-full">
             {!analise && (
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
               <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">

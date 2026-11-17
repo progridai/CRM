@@ -17,9 +17,19 @@ interface ContatoAutocompleteProps {
   hasError?: boolean;
 }
 
-const MIN_SEARCH_LENGTH = 2;
-const SEARCH_DELAY_MS = 300;
+const MIN_SEARCH_LENGTH = 3;
+const SEARCH_DELAY_MS = 180;
 const RESULT_LIMIT = 8;
+const RESULT_CACHE_LIMIT = 50;
+const resultCache = new Map<string, ContatoDto[]>();
+
+function cacheResults(key: string, results: ContatoDto[]) {
+  if (resultCache.size >= RESULT_CACHE_LIMIT) {
+    const oldestKey = resultCache.keys().next().value;
+    if (oldestKey) resultCache.delete(oldestKey);
+  }
+  resultCache.set(key, results);
+}
 
 function iniciais(nome: string): string {
   return nome
@@ -76,11 +86,22 @@ export const ContatoAutocomplete: React.FC<ContatoAutocompleteProps> = ({
     }
 
     const controller = new AbortController();
+    const cacheKey = termo.toLocaleLowerCase('pt-BR');
+    const cached = resultCache.get(cacheKey);
+    if (cached) {
+      setResults(cached);
+      setHighlightedIndex(0);
+      setLoading(false);
+      setRequestError(false);
+      return () => controller.abort();
+    }
+
     const timeout = window.setTimeout(async () => {
       setLoading(true);
       setRequestError(false);
       try {
         const response = await buscarContatos(termo, RESULT_LIMIT, controller.signal);
+        cacheResults(cacheKey, response);
         setResults(response);
         setHighlightedIndex(0);
       } catch (error: any) {
@@ -207,7 +228,7 @@ export const ContatoAutocomplete: React.FC<ContatoAutocompleteProps> = ({
             <div className="flex flex-col items-center px-4 py-6 text-center">
               <Search className="mb-2 h-5 w-5 text-slate-300" />
               <p className="text-xs font-semibold text-slate-600">Encontre o contato</p>
-              <p className="mt-1 text-[11px] text-slate-400">Digite pelo menos 2 caracteres.</p>
+              <p className="mt-1 text-[11px] text-slate-400">Digite pelo menos 3 caracteres.</p>
             </div>
           ) : loading ? (
             <div className="flex items-center justify-center gap-2 px-4 py-6 text-xs text-slate-500">

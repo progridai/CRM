@@ -273,7 +273,7 @@ export const NovoNegocioModal: React.FC<NovoNegocioModalProps> = ({
               {errValor && <p className={errorCls}>{errValor}</p>}
             </div>
             <div className="flex flex-col gap-1">
-              <label className={labelCls}>Referência Externa</label>
+              <label className={labelCls}>Matrícula</label>
               <input
                 type="text"
                 placeholder="Ex: 14299"

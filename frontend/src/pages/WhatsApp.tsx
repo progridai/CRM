@@ -128,7 +128,7 @@ export const WhatsAppPage: React.FC = () => {
       {loading ? (
         <div className="flex min-h-[420px] items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin text-emerald-600" />Carregando…</div>
       ) : activeTab === 'novo' ? (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <section className="flex h-[calc(100dvh-17rem)] min-h-[520px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 dark:border-slate-800 lg:flex-row lg:items-center lg:justify-between">
             <div><h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Selecionar negócios</h2><p className="mt-0.5 text-[11px] text-slate-500">Escolha uma fila do Kanban. Telefones repetidos serão enviados uma única vez.</p></div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_190px_190px]">
@@ -143,7 +143,7 @@ export const WhatsAppPage: React.FC = () => {
             <div className="flex items-center gap-3"><span className="text-[11px] font-semibold text-slate-500">{selectedIds.length} selecionado(s)</span><button type="button" onClick={() => setModalOpen(true)} disabled={selectedIds.length === 0} className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"><Send className="h-3.5 w-3.5" />Revisar disparo</button></div>
           </div>
 
-          <div className="max-h-[560px] overflow-auto custom-scrollbar">
+          <div className="min-h-0 flex-1 overflow-auto custom-scrollbar">
             <table className="w-full min-w-[820px] border-collapse text-left text-xs">
               <thead className="sticky top-0 z-10 bg-slate-50/95 text-[10px] font-bold uppercase tracking-wider text-slate-500 backdrop-blur dark:bg-slate-800/95"><tr><th className="w-12 px-4 py-3"></th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">Telefone</th><th className="px-4 py-3">Competência</th><th className="px-4 py-3">Referência</th><th className="px-4 py-3">Operador</th></tr></thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
