@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useDeferredValue, useMemo, useRef } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { listarEtapas, listarNegocios, type EtapaDto, type NegocioDto } from '../services/negociosService';
+import { listarEtapas, listarNegocios, moverEtapa, type EtapaDto, type NegocioDto } from '../services/negociosService';
 import { NegociosHeader } from '../components/Negocios/NegociosHeader';
 import { KanbanBoard } from '../components/Negocios/KanbanBoard';
 import { NegociosListView } from '../components/Negocios/NegociosListView';
@@ -26,6 +26,8 @@ export const NegociosPage: React.FC = () => {
   const [etapas, setEtapas]     = useState<EtapaDto[]>([]);
   const [negocios, setNegocios] = useState<NegocioDto[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [carregandoEtapas, setCarregandoEtapas] = useState(true);
+  const consultaAtual = useRef<AbortController | null>(null);
   const [erro, setErro]         = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [selectedNegocio, setSelectedNegocio] = useState<NegocioDto | null>(null);
@@ -36,30 +38,40 @@ export const NegociosPage: React.FC = () => {
     owner: operadorFiltroInicial || DEFAULT_NEGOCIOS_FILTERS.owner,
   }));
 
-  const negociosFiltrados = useMemo(
-    () => filterNegocios(negocios, filters),
-    [negocios, filters],
-  );
+  const filtrosAplicados = useDeferredValue(filters);
+  const negociosFiltrados = useMemo(() => filterNegocios(negocios, filtrosAplicados), [negocios, filtrosAplicados]);
+  const ordenacaoDaVista = viewMode === 'list' && sortMode === 'parcelas-desc' ? 'name-asc' : sortMode;
+  const chaveVisualizacao = JSON.stringify([filtrosAplicados, ordenacaoDaVista]);
 
   // ── Carregamento das etapas e negócios ─────────────────────────────────────
   const carregarDados = useCallback(async () => {
+    consultaAtual.current?.abort();
+    const consulta = new AbortController();
+    consultaAtual.current = consulta;
     try {
       setErro(null);
-      const [dataEtapas, dataNegocios] = await Promise.all([
-        listarEtapas(),
-        listarNegocios()
-      ]);
-      setEtapas(dataEtapas);
+      const dataNegocios = await listarNegocios(consulta.signal);
+      if (consulta.signal.aborted) return;
       setNegocios(dataNegocios);
-    } catch (err: any) {
-      setErro(err?.message || 'Erro ao carregar os dados do Kanban.');
+      setSelectedNegocio(atual => atual ? dataNegocios.find(item => item.publicId === atual.publicId) ?? atual : null);
+    } catch (err) {
+      if (!consulta.signal.aborted) setErro(err instanceof Error ? err.message : 'Erro ao carregar os negócios.');
     } finally {
-      setLoading(false);
+      if (!consulta.signal.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    carregarDados();
+    const consultaEtapas = new AbortController();
+    listarEtapas(consultaEtapas.signal)
+      .then(dados => { if (!consultaEtapas.signal.aborted) setEtapas(dados); })
+      .catch(() => { if (!consultaEtapas.signal.aborted) setErro('Erro ao carregar as etapas do Kanban.'); })
+      .finally(() => { if (!consultaEtapas.signal.aborted) setCarregandoEtapas(false); });
+    void carregarDados();
+    return () => {
+      consultaEtapas.abort();
+      consultaAtual.current?.abort();
+    };
   }, [carregarDados]);
 
   useEffect(() => {
@@ -91,33 +103,25 @@ export const NegociosPage: React.FC = () => {
     carregarDados();
   }, [carregarDados]);
 
-  const handleDropCard = useCallback(async (negocioPublicId: string, novaEtapaCodigo: string) => {
-    // Find business and stages
-    const negocio = negocios.find(n => n.publicId === negocioPublicId);
-    if (!negocio || negocio.etapaCodigo === novaEtapaCodigo) return;
-
+  const handleDropCards = useCallback(async (negocioPublicIds: string[], novaEtapaCodigo: string) => {
     const novaEtapa = etapas.find(e => e.codigo === novaEtapaCodigo);
     if (!novaEtapa) return;
 
-    const etapaAnteriorCodigo = negocio.etapaCodigo;
+    const ids = new Set(negocioPublicIds);
+    const movimentos = negocios.filter(n => ids.has(n.publicId) && n.etapaCodigo !== novaEtapaCodigo);
+    if (!movimentos.length) return;
 
-    // Optimistic update — indicators refresh immediately via the prop
-    setNegocios(prev => prev.map(n => 
-      n.publicId === negocioPublicId ? { ...n, etapaCodigo: novaEtapaCodigo } : n
-    ));
+    const etapasAnteriores = new Map(movimentos.map(n => [n.publicId, n.etapaCodigo]));
+    setNegocios(prev => prev.map(n => etapasAnteriores.has(n.publicId) ? { ...n, etapaCodigo: novaEtapaCodigo } : n));
 
-    try {
-      const { moverEtapa } = await import('../services/negociosService');
-      await moverEtapa(negocioPublicId, novaEtapa.publicId);
-      // Refresh from server to sync any server-side changes (counts, indicators, etc.)
-      carregarDados();
-    } catch (err: any) {
-      // Revert optimistic update on error
-      setNegocios(prev => prev.map(n => 
-        n.publicId === negocioPublicId ? { ...n, etapaCodigo: etapaAnteriorCodigo } : n
-      ));
-      setErro(err?.message || 'Erro ao mover o negócio.');
+    const resultados = await Promise.allSettled(movimentos.map(n => moverEtapa(n.publicId, novaEtapa.publicId)));
+    const falharam = new Set(movimentos.filter((_, indice) => resultados[indice].status === 'rejected').map(n => n.publicId));
+    if (falharam.size) {
+      setNegocios(prev => prev.map(n => falharam.has(n.publicId) && n.etapaCodigo === novaEtapaCodigo
+        ? { ...n, etapaCodigo: etapasAnteriores.get(n.publicId) ?? n.etapaCodigo } : n));
     }
+    if (falharam.size < movimentos.length) await carregarDados();
+    if (falharam.size) setErro(`Não foi possível mover ${falharam.size} negócio(s).`);
   }, [negocios, etapas, carregarDados]);
 
   return (
@@ -130,8 +134,9 @@ export const NegociosPage: React.FC = () => {
         todosNegocios={negocios}
         filters={filters}
         onFiltersChange={setFilters}
-        sortMode={sortMode}
+        sortMode={ordenacaoDaVista}
         onSortModeChange={setSortMode}
+        carregando={loading}
       />
 
       {erro && (
@@ -141,28 +146,36 @@ export const NegociosPage: React.FC = () => {
         </div>
       )}
 
-      {loading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      {loading || carregandoEtapas ? (
+        <div role="status" className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
+          <p>Carregando negócios…</p>
+          <div className="flex gap-3 overflow-hidden" aria-hidden="true">
+            {etapas.map(etapa => <div key={etapa.codigo} className="w-80 shrink-0 rounded-xl bg-slate-100 p-3 dark:bg-slate-900">
+              <p className="mb-3 text-xs font-semibold">{etapa.nome}</p>
+              <div className="h-24 motion-safe:animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
+            </div>)}
+          </div>
         </div>
       ) : viewMode === 'kanban' ? (
         <KanbanBoard 
+          key={chaveVisualizacao}
           etapas={etapas} 
           negocios={negociosFiltrados}
           onCardClick={setSelectedNegocio} 
-          onDropCard={handleDropCard} 
+          onDropCard={handleDropCards}
           onOpenQuickActivitiesManager={() => setQuickActivitiesOpen(true)}
           onOpenWhatsApp={setWhatsAppNegocioIds}
           onAtividadeRegistrada={carregarDados}
-          sortMode={sortMode}
+          sortMode={ordenacaoDaVista}
         />
       ) : (
         <NegociosListView
+          key={chaveVisualizacao}
           etapas={etapas}
           negocios={negociosFiltrados}
           onSelectNegocio={setSelectedNegocio}
-          onUpdateEtapa={handleDropCard}
-          sortMode={sortMode}
+          onUpdateEtapa={(id, etapa) => void handleDropCards([id], etapa)}
+          sortMode={ordenacaoDaVista}
         />
       )}
 
@@ -180,17 +193,7 @@ export const NegociosPage: React.FC = () => {
         negocio={selectedNegocio}
         etapas={etapas}
         onClose={() => setSelectedNegocio(null)}
-        onAtividadeRegistrada={() => {
-          carregarDados().then(() => {
-             // Atualizar o selectedNegocio com os novos dados se ele ainda estiver aberto
-             if (selectedNegocio) {
-                listarNegocios().then(lista => {
-                   const atualizado = lista.find(n => n.publicId === selectedNegocio.publicId);
-                   if (atualizado) setSelectedNegocio(atualizado);
-                });
-             }
-          });
-        }}
+        onAtividadeRegistrada={carregarDados}
       />
 
       <QuickActivitiesDrawer 

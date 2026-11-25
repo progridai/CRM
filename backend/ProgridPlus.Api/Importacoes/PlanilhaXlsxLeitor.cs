@@ -2,379 +2,133 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Xml;
-using System.Xml.Linq;
+using ExcelDataReader;
 
 namespace ProgridPlus.Api.Importacoes;
 
-/// <summary>
-/// Leitor mínimo de XLSX para a planilha de inadimplência. A implementação usa
-/// apenas Open XML (o XLSX é um ZIP de XMLs) e não executa macros nem fórmulas.
-/// </summary>
 internal static partial class PlanilhaXlsxLeitor
 {
     private const int MaximoLinhas = 20_000;
-    private const long MaximoXmlDescompactado = 50 * 1024 * 1024;
     private const long MaximoConteudoDescompactado = 100 * 1024 * 1024;
 
-    private static readonly XNamespace SpreadsheetNs =
-        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-    private static readonly XNamespace OfficeRelationshipsNs =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-
-    private static readonly XNamespace PackageRelationshipsNs =
-        "http://schemas.openxmlformats.org/package/2006/relationships";
-
-    private static readonly IReadOnlyDictionary<string, string> Cabecalhos =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["ESTIPULANTE"] = "estipulante",
-            ["MATRICULA"] = "matricula",
-            ["MATRCULA"] = "matricula", // arquivo legado com caractere de acento corrompido
-            ["NOME"] = "nome",
-            ["CPF"] = "cpf",
-            ["ANO"] = "ano",
-            ["COMPETENCIA"] = "competencia",
-            ["COMPETNCIA"] = "competencia", // arquivo legado com caractere de acento corrompido
-            ["SITUACAO"] = "situacao",
-            ["SITUAO"] = "situacao", // arquivo legado com caracteres corrompidos
-            ["PREMIO"] = "premio",
-            ["COBRADOR"] = "cobrador",
-        };
-
-    private static readonly string[] Obrigatorios =
-        ["estipulante", "matricula", "nome", "cpf", "competencia", "situacao", "premio", "cobrador"];
+    static PlanilhaXlsxLeitor() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
     public static ImportacaoPlanilhaResultado Ler(Stream stream)
     {
-        if (!stream.CanRead)
-            throw new InvalidDataException("Não foi possível ler o arquivo enviado.");
-
         try
         {
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-            if (archive.Entries.Sum(entry => entry.Length) > MaximoConteudoDescompactado)
-                throw new InvalidDataException("O conteúdo descompactado da planilha excede o limite permitido.");
-
-            var workbookEntry = ObterEntrada(archive, "xl/workbook.xml");
-            var relsEntry = ObterEntrada(archive, "xl/_rels/workbook.xml.rels");
-            var workbook = CarregarXml(workbookEntry);
-            var rels = CarregarXml(relsEntry);
-            var sharedStrings = LerSharedStrings(archive);
-
-            var relacionamentos = rels.Root?
-                .Elements(PackageRelationshipsNs + "Relationship")
-                .Where(elemento => elemento.Attribute("Id") is not null)
-                .ToDictionary(
-                    elemento => elemento.Attribute("Id")!.Value,
-                    elemento => elemento.Attribute("Target")?.Value ?? string.Empty,
-                    StringComparer.Ordinal)
-                ?? new Dictionary<string, string>(StringComparer.Ordinal);
-
+            if (stream.ReadByte() == 'P' && stream.ReadByte() == 'K')
+            {
+                stream.Position = 0;
+                using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+                if (zip.Entries.Sum(entry => entry.Length) > MaximoConteudoDescompactado)
+                    throw new InvalidDataException("O conteúdo descompactado da planilha excede o limite permitido.");
+            }
+            stream.Position = 0;
+            using var excel = ExcelReaderFactory.CreateReader(stream, new ExcelReaderConfiguration { LeaveOpen = true });
             var linhas = new List<ImportacaoPlanilhaLinha>();
-            var abasLidas = new List<string>();
-            var ordem = 0;
+            var abas = new List<string>();
 
-            var sheets = workbook.Root?
-                .Element(SpreadsheetNs + "sheets")?
-                .Elements(SpreadsheetNs + "sheet")
-                ?? [];
-
-            foreach (var sheet in sheets)
+            do
             {
-                var nome = sheet.Attribute("name")?.Value?.Trim() ?? "Aba sem nome";
-                var relationshipId = sheet.Attribute(OfficeRelationshipsNs + "id")?.Value;
-
-                if (relationshipId is null || !relacionamentos.TryGetValue(relationshipId, out var target))
-                    continue;
-
-                var caminho = ResolverCaminhoPlanilha(target);
-                var worksheetEntry = archive.GetEntry(caminho);
-                if (worksheetEntry is null)
-                    continue;
-
-                var worksheet = CarregarXml(worksheetEntry);
-                var rows = worksheet.Descendants(SpreadsheetNs + "row").ToList();
-                var header = EncontrarCabecalho(rows, sharedStrings);
-                if (header is null)
-                    continue;
-
-                abasLidas.Add(nome);
-
-                foreach (var row in rows.Skip(header.RowIndex + 1))
+                Dictionary<string, int>? colunas = null;
+                var numeroLinha = 0;
+                while (excel.Read())
                 {
-                    var valores = LerCelulas(row, sharedStrings);
-                    if (header.Columns.Values.All(indice => !valores.TryGetValue(indice, out var valor) || string.IsNullOrWhiteSpace(valor)))
+                    numeroLinha++;
+                    if (numeroLinha > MaximoLinhas + 30)
+                        throw new InvalidDataException("Uma aba ultrapassa o limite de linhas.");
+                    if (colunas is null)
+                    {
+                        if (numeroLinha > 30) break;
+                        colunas = LerCabecalho(excel);
+                        if (colunas is not null) abas.Add(excel.Name);
                         continue;
+                    }
 
+                    string Valor(string coluna) => colunas.TryGetValue(coluna, out var indice)
+                        ? FormatarCelula(excel.GetValue(indice))
+                        : string.Empty;
+                    if (colunas.Values.All(indice => string.IsNullOrWhiteSpace(FormatarCelula(excel.GetValue(indice)))))
+                        continue;
                     if (linhas.Count >= MaximoLinhas)
-                        throw new InvalidDataException($"A planilha excede o limite de {MaximoLinhas:N0} linhas de dados.");
+                        throw new InvalidDataException("A planilha excede o limite de 20.000 linhas de dados.");
 
-                    var numeroLinha = int.TryParse(row.Attribute("r")?.Value, out var parsedRow)
-                        ? parsedRow
-                        : header.RowNumber + linhas.Count + 1;
-
-                    string Valor(string coluna) =>
-                        valores.TryGetValue(header.Columns[coluna], out var valor) ? valor.Trim() : string.Empty;
-
-                    string ValorOpcional(string coluna) =>
-                        header.Columns.TryGetValue(coluna, out var indice) && valores.TryGetValue(indice, out var valor)
-                            ? valor.Trim()
-                            : string.Empty;
-
-                    linhas.Add(new ImportacaoPlanilhaLinha(
-                        ++ordem,
-                        nome,
-                        numeroLinha,
-                        Valor("estipulante"),
-                        Valor("matricula"),
-                        Valor("nome"),
-                        Valor("cpf"),
-                        ValorOpcional("ano"),
-                        Valor("competencia"),
-                        Valor("situacao"),
-                        Valor("premio"),
-                        Valor("cobrador")));
+                    TentarLerCompetencia(Valor("COMPETENCIA"), Valor("ANO"), out var mes, out var ano);
+                    linhas.Add(new ImportacaoPlanilhaLinha(linhas.Count + 1, excel.Name, numeroLinha,
+                        Valor("ESTIPULANTE"), Valor("REFERENCIA"), Valor("NOME"), Valor("CPF"), mes, ano,
+                        Valor("SITUACAO"), Valor("PREMIO"), Valor("COBRADOR"), Valor("IDNEGOCIOCRM")));
                 }
-            }
-
-            if (abasLidas.Count == 0)
-            {
-                throw new InvalidDataException(
-                    "Nenhuma aba possui todas as colunas obrigatórias: Estipulante, Matrícula, Nome, CPF, Competência, Situação, Prêmio e Cobrador.");
-            }
+            } while (excel.NextResult());
 
             if (linhas.Count == 0)
-                throw new InvalidDataException("As abas reconhecidas não possuem linhas para importação.");
-
-            var (competenciaMes, competenciaAno) = ObterCompetenciaUnica(linhas);
-            return new ImportacaoPlanilhaResultado(abasLidas, linhas, competenciaMes, competenciaAno);
+                throw new InvalidDataException("Nenhuma linha encontrada. Confira as colunas Estipulante, CPF, Matrícula (ou Apólice/Contrato), Competência e Prêmio.");
+            return new ImportacaoPlanilhaResultado(abas, linhas);
         }
-        catch (InvalidDataException)
+        catch (Exception ex) when (ex is ExcelDataReader.Exceptions.ExcelReaderException or IOException or FormatException or ArgumentException)
         {
-            throw;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or XmlException or UriFormatException)
-        {
-            throw new InvalidDataException("O arquivo não é um XLSX válido ou está corrompido.", ex);
+            throw new InvalidDataException("Não foi possível ler o arquivo Excel. Confira se ele está íntegro e sem senha.", ex);
         }
     }
 
-    private static (int Mes, int Ano) ObterCompetenciaUnica(
-        IReadOnlyList<ImportacaoPlanilhaLinha> linhas)
+    private static Dictionary<string, int>? LerCabecalho(IExcelDataReader excel)
     {
-        var competencias = new HashSet<(int Mes, int Ano)>();
-
-        foreach (var linha in linhas)
+        var colunas = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < excel.FieldCount; i++)
         {
-            if (!TentarLerCompetencia(linha.Competencia, linha.Ano, out var mes, out var ano))
+            var texto = FormatarCelula(excel.GetValue(i)).Normalize(NormalizationForm.FormD);
+            var nome = string.Concat(texto.Where(char.IsLetterOrDigit)).ToUpperInvariant();
+            nome = nome switch
             {
-                throw new InvalidDataException(
-                    $"Competência inválida na aba \"{linha.Aba}\", linha {linha.Linha}. " +
-                    "Informe o mês na coluna Competência e o ano na coluna Ano, ou use o formato MM/AAAA em Competência.");
-            }
-
-            competencias.Add((mes, ano));
+                "CLIENTE" or "SEGURADO" => "NOME",
+                "MATRCULA" => "MATRICULA",
+                "COMPETNCIA" => "COMPETENCIA",
+                "SITUAO" => "SITUACAO",
+                "COBRADORA" or "RESPONSAVEL" => "COBRADOR",
+                _ => nome,
+            };
+            if (nome.Length > 0) colunas.TryAdd(nome, i);
         }
 
-        if (competencias.Count > 1)
+        foreach (var nome in new[] { "APOLICE", "CONTRATO", "MATRICULA" })
         {
-            var periodos = string.Join(", ", competencias
-                .OrderBy(item => item.Ano)
-                .ThenBy(item => item.Mes)
-                .Select(item => $"{item.Mes:D2}/{item.Ano:D4}"));
-            throw new InvalidDataException(
-                $"A planilha contém mais de uma competência ({periodos}). Envie um arquivo com apenas uma competência por importação.");
+            if (!colunas.TryGetValue(nome, out var indice)) continue;
+            colunas["REFERENCIA"] = indice;
+            break;
         }
 
-        return competencias.Single();
+        string[] obrigatorios = ["ESTIPULANTE", "CPF", "REFERENCIA", "COMPETENCIA", "PREMIO"];
+        return obrigatorios.All(colunas.ContainsKey) ? colunas : null;
     }
 
-    private static bool TentarLerCompetencia(
-        string competenciaRaw,
-        string anoRaw,
-        out int mes,
-        out int ano)
+    private static string FormatarCelula(object? valor) => valor switch
     {
-        mes = 0;
-        ano = 0;
-        competenciaRaw = competenciaRaw.Trim();
-        anoRaw = anoRaw.Trim();
+        DateTime data => data.ToString("MM/yyyy", CultureInfo.InvariantCulture),
+        IFormattable numero => numero.ToString(null, CultureInfo.InvariantCulture).Trim(),
+        _ => valor?.ToString()?.Trim() ?? string.Empty,
+    };
 
-        var periodo = PeriodoRegex().Match(competenciaRaw);
+    private static void TentarLerCompetencia(string texto, string anoTexto, out int mes, out int ano)
+    {
+        var periodo = PeriodoRegex().Match(texto);
+        if (!periodo.Success) periodo = PeriodoInvertidoRegex().Match(texto);
         if (periodo.Success)
         {
             mes = int.Parse(periodo.Groups["mes"].Value, CultureInfo.InvariantCulture);
             ano = int.Parse(periodo.Groups["ano"].Value, CultureInfo.InvariantCulture);
-            return CompetenciaValida(mes, ano);
         }
-
-        var periodoInvertido = PeriodoInvertidoRegex().Match(competenciaRaw);
-        if (periodoInvertido.Success)
+        else if (texto.Length == 6 && int.TryParse(texto, out var periodoInt))
         {
-            mes = int.Parse(periodoInvertido.Groups["mes"].Value, CultureInfo.InvariantCulture);
-            ano = int.Parse(periodoInvertido.Groups["ano"].Value, CultureInfo.InvariantCulture);
-            return CompetenciaValida(mes, ano);
+            mes = periodoInt % 100;
+            ano = periodoInt / 100;
         }
-
-        if (competenciaRaw.Length == 6 && int.TryParse(competenciaRaw, out var competenciaInt))
+        else
         {
-            ano = competenciaInt / 100;
-            mes = competenciaInt % 100;
-            return CompetenciaValida(mes, ano);
+            int.TryParse(texto, out mes);
+            int.TryParse(anoTexto, out ano);
         }
-
-        return TentarLerInteiroExcel(competenciaRaw, out mes)
-            && TentarLerInteiroExcel(anoRaw, out ano)
-            && CompetenciaValida(mes, ano);
-    }
-
-    private static bool TentarLerInteiroExcel(string raw, out int valor)
-    {
-        valor = 0;
-        if (!decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var numero) ||
-            numero != decimal.Truncate(numero) ||
-            numero < int.MinValue || numero > int.MaxValue)
-        {
-            return false;
-        }
-
-        valor = decimal.ToInt32(numero);
-        return true;
-    }
-
-    private static bool CompetenciaValida(int mes, int ano) =>
-        mes is >= 1 and <= 12 && ano is >= 2000 and <= 2100;
-
-    private static HeaderInfo? EncontrarCabecalho(
-        IReadOnlyList<XElement> rows,
-        IReadOnlyList<string> sharedStrings)
-    {
-        for (var rowIndex = 0; rowIndex < Math.Min(rows.Count, 15); rowIndex++)
-        {
-            var valores = LerCelulas(rows[rowIndex], sharedStrings);
-            var columns = new Dictionary<string, int>(StringComparer.Ordinal);
-
-            foreach (var (columnIndex, value) in valores)
-            {
-                var normalizado = NormalizarCabecalho(value);
-                if (Cabecalhos.TryGetValue(normalizado, out var canonical) && !columns.ContainsKey(canonical))
-                    columns[canonical] = columnIndex;
-            }
-
-            if (Obrigatorios.All(columns.ContainsKey))
-            {
-                var numeroLinha = int.TryParse(rows[rowIndex].Attribute("r")?.Value, out var parsed)
-                    ? parsed
-                    : rowIndex + 1;
-                return new HeaderInfo(rowIndex, numeroLinha, columns);
-            }
-        }
-
-        return null;
-    }
-
-    private static Dictionary<int, string> LerCelulas(XElement row, IReadOnlyList<string> sharedStrings)
-    {
-        var resultado = new Dictionary<int, string>();
-        var fallbackColumn = 0;
-
-        foreach (var cell in row.Elements(SpreadsheetNs + "c"))
-        {
-            var reference = cell.Attribute("r")?.Value;
-            var columnIndex = string.IsNullOrWhiteSpace(reference)
-                ? fallbackColumn
-                : ObterIndiceColuna(reference);
-
-            fallbackColumn = columnIndex + 1;
-            resultado[columnIndex] = LerValorCelula(cell, sharedStrings);
-        }
-
-        return resultado;
-    }
-
-    private static string LerValorCelula(XElement cell, IReadOnlyList<string> sharedStrings)
-    {
-        var tipo = cell.Attribute("t")?.Value;
-        if (string.Equals(tipo, "inlineStr", StringComparison.Ordinal))
-            return string.Concat(cell.Descendants(SpreadsheetNs + "t").Select(texto => texto.Value));
-
-        var raw = cell.Element(SpreadsheetNs + "v")?.Value ?? string.Empty;
-        if (string.Equals(tipo, "s", StringComparison.Ordinal) &&
-            int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sharedIndex) &&
-            sharedIndex >= 0 && sharedIndex < sharedStrings.Count)
-        {
-            return sharedStrings[sharedIndex];
-        }
-
-        if (string.Equals(tipo, "b", StringComparison.Ordinal))
-            return raw == "1" ? "TRUE" : "FALSE";
-
-        return raw;
-    }
-
-    private static IReadOnlyList<string> LerSharedStrings(ZipArchive archive)
-    {
-        var entry = archive.GetEntry("xl/sharedStrings.xml");
-        if (entry is null)
-            return [];
-
-        var document = CarregarXml(entry);
-        return document.Root?
-            .Elements(SpreadsheetNs + "si")
-            .Select(item => string.Concat(item.Descendants(SpreadsheetNs + "t").Select(texto => texto.Value)))
-            .ToList()
-            ?? [];
-    }
-
-    private static XDocument CarregarXml(ZipArchiveEntry entry)
-    {
-        if (entry.Length > MaximoXmlDescompactado)
-            throw new InvalidDataException("O conteúdo descompactado da planilha excede o limite permitido.");
-
-        using var stream = entry.Open();
-        return XDocument.Load(stream, LoadOptions.None);
-    }
-
-    private static ZipArchiveEntry ObterEntrada(ZipArchive archive, string caminho) =>
-        archive.GetEntry(caminho)
-        ?? throw new InvalidDataException("O arquivo enviado não possui a estrutura esperada de um XLSX.");
-
-    private static string ResolverCaminhoPlanilha(string target)
-    {
-        if (target.StartsWith('/'))
-            return target.TrimStart('/');
-
-        var uri = new Uri(new Uri("https://xlsx.local/xl/workbook.xml"), target);
-        return Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/'));
-    }
-
-    private static int ObterIndiceColuna(string reference)
-    {
-        var index = 0;
-        foreach (var character in reference)
-        {
-            if (!char.IsLetter(character))
-                break;
-            index = index * 26 + (char.ToUpperInvariant(character) - 'A' + 1);
-        }
-        return Math.Max(0, index - 1);
-    }
-
-    private static string NormalizarCabecalho(string value)
-    {
-        var normalized = value.Normalize(NormalizationForm.FormD);
-        var builder = new StringBuilder(normalized.Length);
-        foreach (var character in normalized)
-        {
-            var category = CharUnicodeInfo.GetUnicodeCategory(character);
-            if (category == UnicodeCategory.NonSpacingMark)
-                continue;
-            if (char.IsLetterOrDigit(character))
-                builder.Append(char.ToUpperInvariant(character));
-        }
-        return builder.ToString();
+        if (mes is < 1 or > 12 || ano is < 2000 or > 2100)
+            (mes, ano) = (0, 0);
     }
 
     [GeneratedRegex(@"^(?<mes>\d{1,2})\s*[/\-.]\s*(?<ano>\d{4})$", RegexOptions.CultureInvariant)]
@@ -382,9 +136,4 @@ internal static partial class PlanilhaXlsxLeitor
 
     [GeneratedRegex(@"^(?<ano>\d{4})\s*[/\-.]\s*(?<mes>\d{1,2})$", RegexOptions.CultureInvariant)]
     private static partial Regex PeriodoInvertidoRegex();
-
-    private sealed record HeaderInfo(
-        int RowIndex,
-        int RowNumber,
-        IReadOnlyDictionary<string, int> Columns);
 }

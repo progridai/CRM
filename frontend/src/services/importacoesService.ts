@@ -1,7 +1,6 @@
 import { api } from './api';
 
-export type ModoImportacao = 'adicionar' | 'substituir';
-export type StatusLogImportacao = 'sucesso' | 'nao_importado';
+export type StatusLogImportacao = 'sucesso' | 'vinculado' | 'nao_importado';
 
 export interface ImportacaoNegociosLogDto {
   ordem: number;
@@ -17,36 +16,44 @@ export interface ImportacaoNegociosLogDto {
 
 export interface ImportacaoNegociosResultadoDto {
   arquivo: string;
-  competenciaMes: number;
-  competenciaAno: number;
-  modo: ModoImportacao;
+  mesCobranca: number;
+  anoCobranca: number;
   abasLidas: string[];
   totalLinhas: number;
-  importados: number;
+  inseridos: number;
+  vinculados: number;
   naoImportados: number;
-  substituidos: number;
   valorImportado: number;
   logs: ImportacaoNegociosLogDto[];
 }
 
 export interface ImportacaoPlanilhaAnaliseDto {
   arquivo: string;
-  competenciaMes: number;
-  competenciaAno: number;
+  competencias: { mes: number; ano: number }[];
   abasLidas: string[];
   totalLinhas: number;
+  valorEncontrado: number;
+  valorTotal: number;
+  novos: number;
+  existentes: number;
+  rejeitados: number;
+  semDistribuicao: number;
+  vinculosEncerrados: number;
+  logs: ImportacaoNegociosLogDto[];
+  cobradoras: { id: number; nome: string }[];
+  distribuicao: { cobradoraId: number | null; nome: string; clientes: number; negocios: number; valorTotal: number }[];
+  revisao: string;
 }
+
+export type ModoImportacao = 'adicionar' | 'substituir' | 'limpar';
 
 export interface ImportarNegociosParametros {
   arquivo: File;
-  competenciaMesEsperada: number;
-  competenciaAnoEsperada: number;
+  mesCobranca: number;
+  anoCobranca: number;
   modo: ModoImportacao;
-  onProgress?: (percentual: number) => void;
-}
-
-export interface AnalisarPlanilhaParametros {
-  arquivo: File;
+  participantes: number[];
+  revisao?: string;
   onProgress?: (percentual: number) => void;
 }
 
@@ -56,14 +63,17 @@ export type ResultadoOperacaoImportacao = 'SUCESSO' | 'ERRO';
 export interface ImportacaoOperacaoDto {
   publicId: string;
   tipoOperacao: TipoOperacaoImportacao;
-  competenciaMes: number;
-  competenciaAno: number;
+  mesCobranca: number | null;
+  anoCobranca: number | null;
+  competenciaLegadoMes: number | null;
+  competenciaLegadoAno: number | null;
   nomeArquivo?: string;
   usuarioId?: number;
   usuarioNome?: string;
   dataHora: string;
   quantidadeRegistros: number;
   quantidadeInseridos: number;
+  quantidadeVinculados: number;
   quantidadeAtualizados: number;
   quantidadeExcluidos: number;
   valorTotal: number;
@@ -72,32 +82,30 @@ export interface ImportacaoOperacaoDto {
   dadosAdicionais?: string;
 }
 
-export interface CompetenciaResumoDto {
-  competenciaMes: number;
-  competenciaAno: number;
+export interface MesCobrancaResumoDto {
+  mesCobranca: number;
+  anoCobranca: number;
   quantidade: number;
   valorTotal: number;
 }
 
-export interface ExclusaoCompetenciaResultadoDto {
-  competencia: string;
-  quantidadeExcluida: number;
-  valorTotal: number;
-  sucesso: boolean;
+function criarFormulario(parametros: ImportarNegociosParametros) {
+  const formData = new FormData();
+  formData.append('arquivo', parametros.arquivo);
+  formData.append('mesCobranca', String(parametros.mesCobranca));
+  formData.append('anoCobranca', String(parametros.anoCobranca));
+  formData.append('modo', parametros.modo);
+  parametros.participantes.forEach((id) => formData.append('participantes', String(id)));
+  if (parametros.revisao) formData.append('revisao', parametros.revisao);
+  return formData;
 }
 
 export async function importarNegocios(
   parametros: ImportarNegociosParametros,
 ): Promise<ImportacaoNegociosResultadoDto> {
-  const formData = new FormData();
-  formData.append('arquivo', parametros.arquivo);
-  formData.append('competenciaMesEsperada', String(parametros.competenciaMesEsperada));
-  formData.append('competenciaAnoEsperada', String(parametros.competenciaAnoEsperada));
-  formData.append('modo', parametros.modo);
-
   const { data } = await api.post<ImportacaoNegociosResultadoDto>(
     '/api/importacoes/negocios',
-    formData,
+    criarFormulario(parametros),
     {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (event) => {
@@ -112,14 +120,11 @@ export async function importarNegocios(
 }
 
 export async function analisarPlanilhaNegocios(
-  parametros: AnalisarPlanilhaParametros,
+  parametros: ImportarNegociosParametros,
 ): Promise<ImportacaoPlanilhaAnaliseDto> {
-  const formData = new FormData();
-  formData.append('arquivo', parametros.arquivo);
-
   const { data } = await api.post<ImportacaoPlanilhaAnaliseDto>(
     '/api/importacoes/negocios/analisar',
-    formData,
+    criarFormulario(parametros),
     {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (event) => {
@@ -142,22 +147,12 @@ export async function listarHistoricoImportacoes(
   return data;
 }
 
-export async function consultarResumoCompetencia(
-  competenciaAno: number,
-  competenciaMes: number,
-): Promise<CompetenciaResumoDto> {
-  const { data } = await api.get<CompetenciaResumoDto>(
-    `/api/importacoes/competencias/${competenciaAno}/${competenciaMes}/resumo`,
-  );
-  return data;
-}
-
-export async function excluirCompetencia(
-  competenciaAno: number,
-  competenciaMes: number,
-): Promise<ExclusaoCompetenciaResultadoDto> {
-  const { data } = await api.delete<ExclusaoCompetenciaResultadoDto>(
-    `/api/importacoes/competencias/${competenciaAno}/${competenciaMes}`,
+export async function consultarResumoMesCobranca(
+  ano: number,
+  mes: number,
+): Promise<MesCobrancaResumoDto> {
+  const { data } = await api.get<MesCobrancaResumoDto>(
+    `/api/importacoes/meses-cobranca/${ano}/${mes}/resumo`,
   );
   return data;
 }

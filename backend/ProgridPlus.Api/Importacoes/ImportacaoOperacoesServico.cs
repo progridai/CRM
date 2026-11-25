@@ -1,22 +1,12 @@
-using System.Text.Json;
 using Dapper;
 using Npgsql;
 
 namespace ProgridPlus.Api.Importacoes;
 
-public sealed class ImportacaoOperacoesServico
+public sealed class ImportacaoOperacoesServico(IConfiguration configuration)
 {
-    private readonly string _connectionString;
-    private readonly ILogger<ImportacaoOperacoesServico> _logger;
-
-    public ImportacaoOperacoesServico(
-        IConfiguration configuration,
-        ILogger<ImportacaoOperacoesServico> logger)
-    {
-        _connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Missing DefaultConnection string");
-        _logger = logger;
-    }
+    private readonly string _connectionString = configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("Missing DefaultConnection string");
 
     public async Task<IReadOnlyList<ImportacaoOperacaoDto>> ListarHistoricoAsync(
         int limite,
@@ -27,14 +17,17 @@ public sealed class ImportacaoOperacoesServico
             SELECT
                 public_id AS PublicId,
                 tipo_operacao AS TipoOperacao,
-                competencia_mes::int AS CompetenciaMes,
-                competencia_ano::int AS CompetenciaAno,
+                mes_cobranca::int AS MesCobranca,
+                ano_cobranca::int AS AnoCobranca,
+                competencia_legado_mes::int AS CompetenciaLegadoMes,
+                competencia_legado_ano::int AS CompetenciaLegadoAno,
                 nome_arquivo AS NomeArquivo,
                 usuario_id AS UsuarioId,
                 usuario_nome AS UsuarioNome,
                 data_hora AS DataHora,
                 quantidade_registros AS QuantidadeRegistros,
                 quantidade_inseridos AS QuantidadeInseridos,
+                quantidade_vinculados AS QuantidadeVinculados,
                 quantidade_atualizados AS QuantidadeAtualizados,
                 quantidade_excluidos AS QuantidadeExcluidos,
                 valor_total AS ValorTotal,
@@ -52,26 +45,56 @@ public sealed class ImportacaoOperacoesServico
             new { limite },
             cancellationToken: ct));
         return rows.Select(row => new ImportacaoOperacaoDto(
-            row.PublicId, row.TipoOperacao, row.CompetenciaMes, row.CompetenciaAno,
-            row.NomeArquivo, row.UsuarioId, row.UsuarioNome,
+            row.PublicId, row.TipoOperacao, row.MesCobranca, row.AnoCobranca,
+            row.CompetenciaLegadoMes, row.CompetenciaLegadoAno, row.NomeArquivo, row.UsuarioId, row.UsuarioNome,
             new DateTimeOffset(DateTime.SpecifyKind(row.DataHora, DateTimeKind.Utc)),
-            row.QuantidadeRegistros, row.QuantidadeInseridos, row.QuantidadeAtualizados,
-            row.QuantidadeExcluidos, row.ValorTotal, row.Resultado, row.Mensagem,
-            row.DadosAdicionais)).ToList();
+            row.QuantidadeRegistros, row.QuantidadeInseridos, row.QuantidadeVinculados, row.QuantidadeAtualizados,
+            row.QuantidadeExcluidos, row.ValorTotal, row.Resultado, row.Mensagem, row.DadosAdicionais)).ToList();
     }
 
-    // Npgsql returns timestamptz as UTC DateTime; Dapper record constructors require matching types.
+    public async Task<MesCobrancaResumoDto> ConsultarMesCobrancaAsync(
+        int anoCobranca,
+        int mesCobranca,
+        CancellationToken ct = default)
+    {
+        ImportacaoNegociosServico.ValidarMesCobranca(mesCobranca, anoCobranca);
+        const string sql = """
+            SELECT COUNT(*)::int AS Quantidade, COALESCE(SUM(n.valor), 0) AS ValorTotal
+            FROM crm.negocio n
+            WHERE n.ativo = true AND n.deleted_at IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM crm.importacao_negocio i
+                  INNER JOIN crm.importacao_operacao o ON o.id = i.importacao_operacao_id
+                  WHERE i.negocio_id = n.id AND o.resultado = 'SUCESSO'
+                    AND i.encerrado_por_operacao_id IS NULL
+                    AND o.ano_cobranca = @anoCobranca AND o.mes_cobranca = @mesCobranca
+              );
+            """;
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        var resumo = await connection.QuerySingleAsync<MesCobrancaResumoRow>(new CommandDefinition(
+            sql,
+            new { anoCobranca, mesCobranca },
+            cancellationToken: ct));
+        return new MesCobrancaResumoDto(mesCobranca, anoCobranca, resumo.Quantidade, resumo.ValorTotal);
+    }
+
+    // Npgsql retorna timestamptz como DateTime UTC.
     private sealed record ImportacaoOperacaoRow(
         Guid PublicId,
         string TipoOperacao,
-        int CompetenciaMes,
-        int CompetenciaAno,
+        int? MesCobranca,
+        int? AnoCobranca,
+        int? CompetenciaLegadoMes,
+        int? CompetenciaLegadoAno,
         string? NomeArquivo,
         long? UsuarioId,
         string? UsuarioNome,
         DateTime DataHora,
         int QuantidadeRegistros,
         int QuantidadeInseridos,
+        int QuantidadeVinculados,
         int QuantidadeAtualizados,
         int QuantidadeExcluidos,
         decimal ValorTotal,
@@ -79,193 +102,5 @@ public sealed class ImportacaoOperacoesServico
         string? Mensagem,
         string? DadosAdicionais);
 
-    public async Task<CompetenciaResumoDto> ConsultarCompetenciaAsync(
-        int competenciaAno,
-        int competenciaMes,
-        CancellationToken ct = default)
-    {
-        ValidarCompetencia(competenciaAno, competenciaMes);
-        const string sql = """
-            SELECT
-                COUNT(*)::int AS Quantidade,
-                COALESCE(SUM(valor), 0)::numeric AS ValorTotal
-            FROM crm.negocio
-            WHERE competencia_ano = @competenciaAno
-              AND competencia_mes = @competenciaMes
-              AND ativo = true
-              AND deleted_at IS NULL;
-            """;
-
-        await using var connection = new NpgsqlConnection(_connectionString);
-        var resumo = await connection.QuerySingleAsync<CompetenciaResumoRow>(new CommandDefinition(
-            sql,
-            new { competenciaAno, competenciaMes },
-            cancellationToken: ct));
-
-        return new CompetenciaResumoDto(
-            competenciaMes,
-            competenciaAno,
-            resumo.Quantidade,
-            resumo.ValorTotal);
-    }
-
-    public async Task<ExclusaoCompetenciaResultadoDto> ExcluirCompetenciaAsync(
-        int competenciaAno,
-        int competenciaMes,
-        long usuarioId,
-        string? usuarioNome,
-        CancellationToken ct = default)
-    {
-        ValidarCompetencia(competenciaAno, competenciaMes);
-
-        await using var connection = new NpgsqlConnection(_connectionString);
-        await connection.OpenAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(ct);
-
-        try
-        {
-            const string selectSql = """
-                SELECT id AS Id, valor AS Valor
-                FROM crm.negocio
-                WHERE competencia_ano = @competenciaAno
-                  AND competencia_mes = @competenciaMes
-                  AND ativo = true
-                  AND deleted_at IS NULL
-                FOR UPDATE;
-                """;
-
-            var negocios = (await connection.QueryAsync<NegocioExclusaoRow>(new CommandDefinition(
-                selectSql,
-                new { competenciaAno, competenciaMes },
-                transaction,
-                cancellationToken: ct))).AsList();
-
-            var ids = negocios.Select(negocio => negocio.Id).ToArray();
-            var valorTotal = negocios.Sum(negocio => negocio.Valor);
-            var quantidadeExcluida = 0;
-
-            if (ids.Length > 0)
-            {
-                const string updateSql = """
-                    UPDATE crm.negocio
-                    SET ativo = false,
-                        deleted_at = NOW(),
-                        updated_at = NOW()
-                    WHERE id = ANY(@ids)
-                      AND ativo = true
-                      AND deleted_at IS NULL;
-                    """;
-                quantidadeExcluida = await connection.ExecuteAsync(new CommandDefinition(
-                    updateSql,
-                    new { ids },
-                    transaction,
-                    cancellationToken: ct));
-            }
-
-            await ImportacaoOperacaoHistoricoStore.InserirAsync(
-                connection,
-                transaction,
-                new ImportacaoOperacaoRegistro(
-                    "EXCLUSAO_COMPETENCIA",
-                    competenciaMes,
-                    competenciaAno,
-                    null,
-                    usuarioId,
-                    Limitar(usuarioNome, 200),
-                    negocios.Count,
-                    0,
-                    0,
-                    quantidadeExcluida,
-                    valorTotal,
-                    "SUCESSO",
-                    $"{quantidadeExcluida} negócio(s) excluído(s) da competência.",
-                    JsonSerializer.Serialize(new
-                    {
-                        estrategia = "exclusao_logica",
-                        quantidadeAntes = negocios.Count,
-                    })),
-                ct);
-
-            await transaction.CommitAsync(ct);
-
-            return new ExclusaoCompetenciaResultadoDto(
-                $"{competenciaAno:D4}-{competenciaMes:D2}",
-                quantidadeExcluida,
-                valorTotal,
-                true);
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(CancellationToken.None);
-            await RegistrarFalhaExclusaoAsync(
-                competenciaAno,
-                competenciaMes,
-                usuarioId,
-                usuarioNome,
-                ex.Message);
-            throw;
-        }
-    }
-
-    private async Task RegistrarFalhaExclusaoAsync(
-        int competenciaAno,
-        int competenciaMes,
-        long usuarioId,
-        string? usuarioNome,
-        string mensagem)
-    {
-        try
-        {
-            await using var connection = new NpgsqlConnection(_connectionString);
-            await connection.OpenAsync(CancellationToken.None);
-            await ImportacaoOperacaoHistoricoStore.InserirAsync(
-                connection,
-                null,
-                new ImportacaoOperacaoRegistro(
-                    "EXCLUSAO_COMPETENCIA",
-                    competenciaMes,
-                    competenciaAno,
-                    null,
-                    usuarioId,
-                    Limitar(usuarioNome, 200),
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    "ERRO",
-                    Limitar(mensagem, 1000),
-                    null),
-                CancellationToken.None);
-        }
-        catch (Exception historyException)
-        {
-            _logger.LogError(historyException, "Não foi possível registrar a falha da exclusão no histórico operacional.");
-        }
-    }
-
-    private static void ValidarCompetencia(int ano, int mes)
-    {
-        if (mes is < 1 or > 12)
-            throw new ArgumentException("O mês de competência deve estar entre 1 e 12.");
-        if (ano is < 2000 or > 2100)
-            throw new ArgumentException("O ano de competência deve estar entre 2000 e 2100.");
-    }
-
-    private static string? Limitar(string? valor, int tamanho) =>
-        string.IsNullOrWhiteSpace(valor)
-            ? null
-            : valor.Trim()[..Math.Min(valor.Trim().Length, tamanho)];
-
-    private sealed class CompetenciaResumoRow
-    {
-        public int Quantidade { get; init; }
-        public decimal ValorTotal { get; init; }
-    }
-
-    private sealed class NegocioExclusaoRow
-    {
-        public long Id { get; init; }
-        public decimal Valor { get; init; }
-    }
+    private sealed record MesCobrancaResumoRow(int Quantidade, decimal ValorTotal);
 }

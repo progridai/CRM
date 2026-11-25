@@ -60,7 +60,7 @@ export const HistoricoImportacoes: React.FC<HistoricoImportacoesProps> = ({ refr
           </span>
           <div>
             <h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Histórico de operações</h2>
-            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Importações e exclusões mais recentes</p>
+            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">Cargas recentes e operações anteriores</p>
           </div>
         </div>
         <button
@@ -89,7 +89,7 @@ export const HistoricoImportacoes: React.FC<HistoricoImportacoesProps> = ({ refr
         <div className="flex min-h-64 flex-col items-center justify-center gap-2 px-6 text-center">
           <History className="h-8 w-8 text-slate-300 dark:text-slate-700" />
           <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Nenhuma operação registrada</p>
-          <p className="text-xs text-slate-400">As próximas importações e exclusões aparecerão aqui.</p>
+          <p className="text-xs text-slate-400">As próximas importações aparecerão aqui.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -98,7 +98,7 @@ export const HistoricoImportacoes: React.FC<HistoricoImportacoesProps> = ({ refr
               <tr className="border-b border-slate-200 dark:border-slate-700">
                 <th className="px-4 py-3">Data/hora</th>
                 <th className="px-4 py-3">Operação</th>
-                <th className="px-4 py-3">Competência</th>
+                <th className="px-4 py-3">Mês de Cobrança</th>
                 <th className="px-4 py-3">Arquivo</th>
                 <th className="px-4 py-3">Usuário</th>
                 <th className="px-4 py-3">Quantidade</th>
@@ -109,7 +109,7 @@ export const HistoricoImportacoes: React.FC<HistoricoImportacoesProps> = ({ refr
               {operacoes.map((operacao) => {
                 const isImport = operacao.tipoOperacao === 'IMPORTACAO';
                 const success = operacao.resultado === 'SUCESSO';
-                const quantity = isImport ? operacao.quantidadeInseridos : operacao.quantidadeExcluidos;
+                const quantity = isImport ? operacao.quantidadeInseridos + operacao.quantidadeVinculados : operacao.quantidadeExcluidos;
 
                 return (
                   <tr key={operacao.publicId} className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/35">
@@ -121,7 +121,11 @@ export const HistoricoImportacoes: React.FC<HistoricoImportacoesProps> = ({ refr
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">
-                      {MESES_ABREV[operacao.competenciaMes - 1]}/{operacao.competenciaAno}
+                      {operacao.mesCobranca && operacao.anoCobranca ? (
+                        `${MESES_ABREV[operacao.mesCobranca - 1]}/${operacao.anoCobranca}`
+                      ) : operacao.competenciaLegadoMes && operacao.competenciaLegadoAno ? (
+                        <span title="Competência registrada no modelo anterior">Legado · {MESES_ABREV[operacao.competenciaLegadoMes - 1]}/{operacao.competenciaLegadoAno}</span>
+                      ) : '—'}
                     </td>
                     <td className="max-w-44 px-4 py-3 text-slate-500 dark:text-slate-400">
                       <span className="block truncate" title={operacao.nomeArquivo}>{operacao.nomeArquivo || '—'}</span>
@@ -133,8 +137,13 @@ export const HistoricoImportacoes: React.FC<HistoricoImportacoesProps> = ({ refr
                       <span className="block font-semibold text-slate-800 dark:text-slate-100">
                         {quantity} {quantity === 1 ? 'negócio' : 'negócios'}
                       </span>
+                      {operacao.quantidadeVinculados > 0 && (
+                        <span className="mt-0.5 block text-[10px] text-slate-400">
+                          {operacao.quantidadeInseridos} criado(s) · {operacao.quantidadeVinculados} vinculado(s)
+                        </span>
+                      )}
                       {isImport && operacao.quantidadeExcluidos > 0 && (
-                        <span className="mt-0.5 block text-[10px] text-slate-400">{operacao.quantidadeExcluidos} anterior(es) removido(s)</span>
+                        <span className="mt-0.5 block text-[10px] text-slate-400">{operacao.quantidadeExcluidos} {operacao.mesCobranca ? 'vínculo(s) encerrado(s)' : 'anterior(es) removido(s)'}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

@@ -148,6 +148,11 @@ public class NegociosController : ControllerBase
         return Ok(historico);
     }
 
+    [HttpGet("{publicId:guid}/importacoes")]
+    public async Task<ActionResult<IReadOnlyList<NegocioImportacaoDto>>> ListarImportacoes(
+        [FromRoute] Guid publicId, CancellationToken ct) =>
+        Ok(await _consulta.ListarImportacoesAsync(publicId, ct));
+
     /// <summary>
     /// Registra uma nova atividade num negócio.
     /// </summary>

@@ -39,10 +39,19 @@ public sealed class NegociosConsulta
         )
         SELECT
             n.public_id       AS PublicId,
+            cl.public_id      AS ClientePublicId,
             n.valor           AS Valor,
             n.referencia      AS Referencia,
             n.competencia_mes AS CompetenciaMes,
             n.competencia_ano AS CompetenciaAno,
+            ARRAY(
+                SELECT DISTINCT o.ano_cobranca::text || '-' || LPAD(o.mes_cobranca::text, 2, '0')
+                FROM crm.importacao_negocio i
+                INNER JOIN crm.importacao_operacao o ON o.id = i.importacao_operacao_id
+                WHERE i.negocio_id = n.id AND o.resultado = 'SUCESSO' AND o.ano_cobranca IS NOT NULL
+                    AND i.encerrado_por_operacao_id IS NULL
+                ORDER BY 1
+            ) AS MesesCobranca,
             n.origem          AS Origem,
             n.notas           AS Notas,
             n.data_vencimento AS DataVencimento,
@@ -55,6 +64,11 @@ public sealed class NegociosConsulta
             op.nome           AS NomeOperador,
             e.codigo          AS EtapaCodigo,
             p.nome            AS NomeCliente,
+            CASE
+                WHEN isfinite(p.data_nascimento)
+                    AND p.data_nascimento <= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date
+                THEN EXTRACT(YEAR FROM AGE((CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date, p.data_nascimento))::int
+            END               AS IdadeCliente,
             p.documento_principal AS Documento,
             (
                 SELECT pc.valor 
@@ -154,6 +168,44 @@ public sealed class NegociosConsulta
             new CommandDefinition(QueryHistorico, new { NegocioPublicId = negocioPublicId }, cancellationToken: ct));
         return rows.AsList();
     }
+
+    public async Task<IReadOnlyList<NegocioImportacaoDto>> ListarImportacoesAsync(
+        Guid negocioPublicId, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT
+                o.public_id AS PublicId,
+                o.mes_cobranca AS MesCobranca,
+                o.ano_cobranca AS AnoCobranca,
+                o.nome_arquivo AS NomeArquivo,
+                o.data_hora AS DataHora,
+                i.aba AS Aba,
+                i.linha AS Linha,
+                i.encerrado_por_operacao_id IS NOT NULL AS Encerrado
+            FROM crm.negocio n
+            INNER JOIN crm.importacao_negocio i ON i.negocio_id = n.id
+            INNER JOIN crm.importacao_operacao o ON o.id = i.importacao_operacao_id
+            WHERE n.public_id = @negocioPublicId AND o.resultado = 'SUCESSO' AND o.ano_cobranca IS NOT NULL
+            ORDER BY o.data_hora DESC, o.id DESC;
+            """;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        var importacoes = await conn.QueryAsync<NegocioImportacaoDto>(new CommandDefinition(
+            sql, new { negocioPublicId }, cancellationToken: ct));
+        return importacoes.AsList();
+    }
+}
+
+public sealed class NegocioImportacaoDto
+{
+    public Guid PublicId { get; set; }
+    public int MesCobranca { get; set; }
+    public int AnoCobranca { get; set; }
+    public string? NomeArquivo { get; set; }
+    public DateTime DataHora { get; set; }
+    public string Aba { get; set; } = string.Empty;
+    public int Linha { get; set; }
+    public bool Encerrado { get; set; }
 }
 
 public sealed class HistoricoDto
@@ -170,10 +222,13 @@ public sealed class HistoricoDto
 public sealed class NegocioListaDto
 {
     public Guid PublicId { get; set; }
+    public Guid ClientePublicId { get; set; }
+    public int? IdadeCliente { get; set; }
     public decimal Valor { get; set; }
     public string? Referencia { get; set; }
     public int CompetenciaMes { get; set; }
     public int CompetenciaAno { get; set; }
+    public string[] MesesCobranca { get; set; } = [];
     public string? Origem { get; set; }
     public string? Notas { get; set; }
     public DateTime? DataVencimento { get; set; }

@@ -5,15 +5,14 @@ using Npgsql;
 namespace ProgridPlus.Api.Importacoes;
 
 internal sealed record ImportacaoOperacaoRegistro(
-    string TipoOperacao,
-    int CompetenciaMes,
-    int CompetenciaAno,
+    int MesCobranca,
+    int AnoCobranca,
     string? NomeArquivo,
     long? UsuarioId,
     string? UsuarioNome,
     int QuantidadeRegistros,
     int QuantidadeInseridos,
-    int QuantidadeAtualizados,
+    int QuantidadeVinculados,
     int QuantidadeExcluidos,
     decimal ValorTotal,
     string Resultado,
@@ -25,43 +24,43 @@ internal static class ImportacaoOperacaoHistoricoStore
     private const string InsertSql = """
         INSERT INTO crm.importacao_operacao (
             tipo_operacao,
-            competencia_mes,
-            competencia_ano,
+            mes_cobranca,
+            ano_cobranca,
             nome_arquivo,
             usuario_id,
             usuario_nome,
             quantidade_registros,
             quantidade_inseridos,
-            quantidade_atualizados,
+            quantidade_vinculados,
             quantidade_excluidos,
             valor_total,
             resultado,
             mensagem,
             dados_adicionais
         ) VALUES (
-            @TipoOperacao,
-            @CompetenciaMes,
-            @CompetenciaAno,
+            'IMPORTACAO',
+            @MesCobranca,
+            @AnoCobranca,
             @NomeArquivo,
             @UsuarioId,
             @UsuarioNome,
             @QuantidadeRegistros,
             @QuantidadeInseridos,
-            @QuantidadeAtualizados,
+            @QuantidadeVinculados,
             @QuantidadeExcluidos,
             @ValorTotal,
             @Resultado,
             @Mensagem,
             CAST(@DadosAdicionaisJson AS jsonb)
-        );
+        ) RETURNING id;
         """;
 
-    public static Task InserirAsync(
+    public static Task<long> InserirAsync(
         NpgsqlConnection connection,
         IDbTransaction? transaction,
         ImportacaoOperacaoRegistro registro,
         CancellationToken ct = default) =>
-        connection.ExecuteAsync(new CommandDefinition(
+        connection.QuerySingleAsync<long>(new CommandDefinition(
             InsertSql,
             registro,
             transaction,

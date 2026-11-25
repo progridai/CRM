@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X, Phone, MessageCircle, MessageSquare, Plus, FileText, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { listarAtividades, registrarAtividade, type AtividadeDto, type EtapaDto, type NegocioDto } from '../../services/negociosService';
@@ -6,12 +6,13 @@ import { useQuickActivityTemplates } from '../../hooks/useQuickActivityTemplates
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 import { getNameInitial } from '../../utils';
 import type { NegociosSort } from '../../types';
+import { PaginacaoNegocios } from './PaginacaoNegocios';
 
 interface KanbanBoardProps {
   etapas: EtapaDto[];
   negocios: NegocioDto[];
   onCardClick: (negocio: NegocioDto) => void;
-  onDropCard: (negocioPublicId: string, novaEtapaCodigo: string) => void;
+  onDropCard: (negocioPublicIds: string[], novaEtapaCodigo: string) => void;
   onOpenQuickActivitiesManager: () => void;
   onOpenWhatsApp: (negocioIds: string[]) => void;
   onAtividadeRegistrada?: () => void;
@@ -21,12 +22,10 @@ interface KanbanBoardProps {
 type ActivityType = 'whatsapp' | 'ligacao' | 'pagamento' | 'anotacao';
 const ALL_GROUP_DEALS = '__all_group_deals__';
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-};
+const formatCurrency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format;
+const compararNomes = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true }).compare;
+const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const CARDS_POR_PAGINA = 24;
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCardClick, onDropCard, onOpenQuickActivitiesManager, onOpenWhatsApp, onAtividadeRegistrada, sortMode }) => {
   const { getWhatsAppLink } = useWhatsAppLink();
@@ -44,6 +43,37 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
   const activityPanelRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const [navigation, setNavigation] = useState({ previous: false, next: false });
+  const [paginas, setPaginas] = useState<Record<string, number>>({});
+
+  const colunas = useMemo(() => {
+    const porEtapa = new Map<string, { clientes: Map<string, NegocioDto[]>; totalValor: number; quantidade: number }>();
+    for (const negocio of negocios) {
+      const { etapaCodigo, clientePublicId } = negocio;
+      const coluna = porEtapa.get(etapaCodigo) ?? { clientes: new Map<string, NegocioDto[]>(), totalValor: 0, quantidade: 0 };
+      const grupo = coluna.clientes.get(clientePublicId) ?? [];
+      grupo.push(negocio);
+      coluna.clientes.set(clientePublicId, grupo);
+      coluna.totalValor += negocio.valor;
+      coluna.quantidade++;
+      porEtapa.set(etapaCodigo, coluna);
+    }
+
+    const ordenarPorValor = sortMode === 'value-asc' || sortMode === 'value-desc';
+    const direcao = sortMode === 'value-desc' || sortMode === 'name-desc' ? -1 : 1;
+    return new Map([...porEtapa].map(([codigo, coluna]) => {
+      const grupos = [...coluna.clientes].map(([cliente, grupo]) => ({
+        chave: `${codigo}|${cliente}`,
+        grupo: ordenarPorValor ? grupo.sort((a, b) => direcao * (a.valor - b.valor)) : grupo,
+        totalGrupo: grupo.reduce((total, item) => total + item.valor, 0),
+      }));
+      grupos.sort((a, b) => {
+        if (ordenarPorValor) return direcao * (a.totalGrupo - b.totalGrupo);
+        const porQuantidade = sortMode === 'parcelas-desc' ? b.grupo.length - a.grupo.length : 0;
+        return porQuantidade || direcao * compararNomes(a.grupo[0].nomeCliente, b.grupo[0].nomeCliente);
+      });
+      return [codigo, { grupos, totalValor: coluna.totalValor, quantidade: coluna.quantidade }] as const;
+    }));
+  }, [negocios, sortMode]);
 
   useEffect(() => {
     const board = boardRef.current;
@@ -222,15 +252,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
 
   const handleDrop = (e: React.DragEvent<HTMLElement>, etapaCodigo: string) => {
     e.preventDefault();
-    const payload = e.dataTransfer.getData('text/plain');
-    if (payload) {
-      const ids = payload.split(',');
-      ids.forEach(id => {
-        if (id.trim()) {
-          onDropCard(id.trim(), etapaCodigo);
-        }
-      });
-    }
+    const ids = e.dataTransfer.getData('text/plain').split(',').map(id => id.trim()).filter(Boolean);
+    if (ids.length) onDropCard(ids, etapaCodigo);
   };
 
   return (
@@ -251,9 +274,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
     <div ref={boardRef} id="kanban-columns" tabIndex={0} aria-label="Colunas do Kanban" className="flex-1 overflow-x-auto overflow-y-hidden -mx-4 px-4 sm:mx-0 sm:px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
       <div className="-mx-2 flex min-h-[500px] items-stretch pb-4">
         {etapas.map((etapa) => {
-          // Filtra negócios desta etapa
-          const negociosEtapa = negocios.filter((n) => n.etapaCodigo === etapa.codigo);
-          const totalValor = negociosEtapa.reduce((acc, n) => acc + n.valor, 0);
+          const { grupos, totalValor, quantidade } = colunas.get(etapa.codigo) ?? { grupos: [], totalValor: 0, quantidade: 0 };
+          const ultimaPagina = Math.max(0, Math.ceil(grupos.length / CARDS_POR_PAGINA) - 1);
+          const pagina = Math.min(paginas[etapa.codigo] ?? 0, ultimaPagina);
+          const inicio = pagina * CARDS_POR_PAGINA;
 
           // Fallback para cor_hex vazio
           const color = etapa.corHex || '#94a3b8';
@@ -283,7 +307,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                     {etapa.nome}
                   </h2>
                   <span className="min-w-4 h-4 px-1.5 rounded-full bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center leading-none shrink-0 border border-transparent dark:border-slate-700/60">
-                    {negociosEtapa.length}
+                    {quantidade}
                   </span>
                 </div>
 
@@ -294,49 +318,21 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                 </div>
               </div>
 
+              <PaginacaoNegocios pagina={pagina} porPagina={CARDS_POR_PAGINA} total={grupos.length}
+                unidade={`cards em ${etapa.nome}`} onChange={(novaPagina) => {
+                  setOpenGroup(null);
+                  setPaginas(atuais => ({ ...atuais, [etapa.codigo]: novaPagina }));
+                }} />
+
               {/* Área de Cards */}
               <div className="flex flex-col gap-2.5 min-h-[150px]">
-                {negociosEtapa.length === 0 ? (
+                {quantidade === 0 ? (
                   <div className="flex-1 rounded-xl border-2 border-dashed border-slate-300/50 dark:border-slate-700/50 bg-white/30 dark:bg-slate-900/20 flex items-center justify-center min-h-[100px]">
                     <span className="text-xs font-medium text-slate-400 dark:text-slate-500">
                       Nenhum negócio
                     </span>
                   </div>
-                ) : (
-                  (() => {
-                    const grupos = negociosEtapa.reduce((acc, negocio) => {
-                      const key = `${etapa.codigo}|${negocio.nomeCliente}|${negocio.documento || ''}`;
-                      if (!acc[key]) acc[key] = [];
-                      acc[key].push(negocio);
-                      return acc;
-                    }, {} as Record<string, typeof negociosEtapa>);
-
-                    const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-                    const gruposOrdenados = Object.entries(grupos).sort(([, grupoA], [, grupoB]) => {
-                      if (sortMode === 'value-desc' || sortMode === 'value-asc') {
-                        const totalA = grupoA.reduce((total, negocio) => total + negocio.valor, 0);
-                        const totalB = grupoB.reduce((total, negocio) => total + negocio.valor, 0);
-                        return sortMode === 'value-desc' ? totalB - totalA : totalA - totalB;
-                      }
-
-                      const comparison = grupoA[0].nomeCliente.localeCompare(
-                        grupoB[0].nomeCliente,
-                        'pt-BR',
-                        { sensitivity: 'base', numeric: true },
-                      );
-                      return sortMode === 'name-desc' ? -comparison : comparison;
-                    });
-
-                    return gruposOrdenados.map(([chave, grupoOriginal]) => {
-                      const grupo = sortMode === 'value-desc' || sortMode === 'value-asc'
-                        ? [...grupoOriginal].sort((negocioA, negocioB) =>
-                            sortMode === 'value-desc'
-                              ? negocioB.valor - negocioA.valor
-                              : negocioA.valor - negocioB.valor,
-                          )
-                        : grupoOriginal;
-                      const totalGrupo = grupo.reduce((acc, n) => acc + n.valor, 0);
+                ) : grupos.slice(inicio, inicio + CARDS_POR_PAGINA).map(({ chave, grupo, totalGrupo }) => {
                       const totalAtividades = grupo.reduce((acc, n) => acc + (n.atividadesCount || 0), 0);
                       const primeiro = grupo[0];
                       const idsGrupo = grupo.map(n => n.publicId).join(',');
@@ -853,9 +849,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                           )}
                         </div>
                       );
-                    });
-                  })()
-                )}
+                })}
               </div>
               </section>
             </div>

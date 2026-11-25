@@ -2,6 +2,7 @@ import type { NegocioDto } from '../../services/negociosService';
 
 export interface NegociosFilters {
   search: string;
+  mesCobranca: string;
   competence: string;
   origin: string;
   owner: string;
@@ -9,6 +10,7 @@ export interface NegociosFilters {
 
 export const DEFAULT_NEGOCIOS_FILTERS: NegociosFilters = {
   search: '',
+  mesCobranca: 'Todos',
   competence: 'Todas',
   origin: 'Todas',
   owner: 'Todos',
@@ -22,6 +24,11 @@ const normalizeSearchValue = (value?: string | null) =>
 
 export const getCompetenceValue = (negocio: NegocioDto) =>
   `${negocio.competenciaAno}-${String(negocio.competenciaMes).padStart(2, '0')}`;
+
+export function formatarPeriodo(periodo: string) {
+  const [ano, mes] = periodo.split('-');
+  return `${mes}/${ano}`;
+}
 
 export function filterNegocios(
   negocios: NegocioDto[],
@@ -41,6 +48,9 @@ export function filterNegocios(
       filters.competence === 'Todas' ||
       getCompetenceValue(negocio) === filters.competence;
 
+    const matchesMesCobranca = filters.mesCobranca === 'Todos' ||
+      negocio.mesesCobranca.includes(filters.mesCobranca);
+
     const matchesOrigin =
       filters.origin === 'Todas' ||
       (negocio.origem ?? '').includes(filters.origin);
@@ -48,7 +58,7 @@ export function filterNegocios(
     const matchesOwner =
       filters.owner === 'Todos' || negocio.nomeOperador === filters.owner;
 
-    return matchesSearch && matchesCompetence && matchesOrigin && matchesOwner;
+    return matchesSearch && matchesMesCobranca && matchesCompetence && matchesOrigin && matchesOwner;
   });
 }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProgridPlus.Api.Importacoes;
@@ -8,142 +9,86 @@ namespace ProgridPlus.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public sealed class ImportacoesController : ControllerBase
+public sealed class ImportacoesController(
+    ImportacaoNegociosServico servico,
+    ImportacaoOperacoesServico operacoes,
+    ILogger<ImportacoesController> logger) : ControllerBase
 {
     private const long TamanhoMaximoArquivo = 10 * 1024 * 1024;
-    private readonly ImportacaoNegociosServico _servico;
-    private readonly ImportacaoOperacoesServico _operacoesServico;
-    private readonly ILogger<ImportacoesController> _logger;
 
-    public ImportacoesController(
-        ImportacaoNegociosServico servico,
-        ImportacaoOperacoesServico operacoesServico,
-        ILogger<ImportacoesController> logger)
+    [HttpPost("negocios/analisar")]
+    [RequestSizeLimit(TamanhoMaximoArquivo + 65536)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> AnalisarPlanilha([FromForm] DadosImportacao dados, CancellationToken ct)
     {
-        _servico = servico;
-        _operacoesServico = operacoesServico;
-        _logger = logger;
+        var inicio = Stopwatch.GetTimestamp();
+        var referencia = HttpContext.TraceIdentifier;
+        try
+        {
+            await using var stream = AbrirPlanilha(dados.Arquivo);
+            var analise = await servico.AnalisarAsync(stream, dados.Arquivo.FileName, dados.MesCobranca,
+                dados.AnoCobranca, dados.Modo, dados.Participantes, ct);
+            logger.LogInformation(
+                "Análise de importação concluída. Referência {Referencia}, {Linhas} linhas, {Rejeitados} rejeitadas, {DuracaoMs} ms.",
+                referencia, analise.TotalLinhas, analise.Rejeitados, Stopwatch.GetElapsedTime(inicio).TotalMilliseconds);
+            return Ok(analise);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            var sqlState = (ex as Npgsql.PostgresException)?.SqlState;
+            logger.LogError(
+                "Falha na análise de importação. Referência {Referencia}, exceção {Tipo}, SQLSTATE {SqlState}, {DuracaoMs} ms.",
+                referencia, ex.GetType().Name, sqlState, Stopwatch.GetElapsedTime(inicio).TotalMilliseconds);
+            return StatusCode(500, new { message = "A API não conseguiu analisar a planilha.", referencia });
+        }
     }
 
     [HttpPost("negocios")]
-    [RequestSizeLimit(TamanhoMaximoArquivo)]
+    [RequestSizeLimit(TamanhoMaximoArquivo + 65536)]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> ImportarNegocios(
-        [FromForm] IFormFile arquivo,
-        [FromForm] int competenciaMesEsperada,
-        [FromForm] int competenciaAnoEsperada,
-        [FromForm] string modo,
-        CancellationToken ct)
+    public async Task<IActionResult> ImportarNegocios([FromForm] DadosImportacao dados, CancellationToken ct)
     {
-        if (HttpContext.Items["UsuarioId"] is not long usuarioLogadoId)
+        if (HttpContext.Items["UsuarioId"] is not long usuarioId)
             return StatusCode(500, new { message = "Contexto de usuário não disponível." });
-
-        if (arquivo is null || arquivo.Length == 0)
-            return BadRequest(new { message = "Selecione uma planilha XLSX para importar." });
-
-        if (arquivo.Length > TamanhoMaximoArquivo)
-            return BadRequest(new { message = "A planilha deve ter no máximo 10 MB." });
-
-        if (!string.Equals(Path.GetExtension(arquivo.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "Formato inválido. Envie um arquivo com extensão .xlsx." });
-
+        var acesso = HttpContext.Items["UsuarioAcesso"] as UsuarioAcesso;
         try
         {
-            await using var stream = arquivo.OpenReadStream();
-            var resultado = await _servico.ImportarAsync(
-                stream,
-                arquivo.FileName,
-                competenciaMesEsperada,
-                competenciaAnoEsperada,
-                modo ?? string.Empty,
-                usuarioLogadoId,
-                ObterUsuarioNome(),
-                ct);
-
-            return Ok(resultado);
+            await using var stream = AbrirPlanilha(dados.Arquivo);
+            return Ok(await servico.ImportarAsync(stream, dados.Arquivo.FileName, dados.MesCobranca,
+                dados.AnoCobranca, dados.Modo, dados.Participantes, dados.Revisao ?? string.Empty, usuarioId,
+                acesso is null ? null : string.IsNullOrWhiteSpace(acesso.Nome) ? acesso.Username : acesso.Nome, ct));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
         {
-            var mensagemPublica = ex switch
-            {
-                ArgumentException or InvalidDataException or InvalidOperationException => ex.Message,
-                _ => "Não foi possível concluir a importação.",
-            };
-
-            await _servico.RegistrarFalhaAsync(
-                arquivo.FileName,
-                competenciaMesEsperada,
-                competenciaAnoEsperada,
-                modo ?? string.Empty,
-                usuarioLogadoId,
-                ObterUsuarioNome(),
-                mensagemPublica);
-
-            if (ex is ArgumentException or InvalidDataException)
-                return BadRequest(new { message = ex.Message });
-
-            if (ex is InvalidOperationException)
-            {
-                _logger.LogWarning("Falha de regra na importação de negócios: {Erro}", ex.Message);
-                return UnprocessableEntity(new { message = ex.Message });
-            }
-
-            _logger.LogError(ex, "Falha inesperada na importação de negócios.");
-            return StatusCode(500, new { message = mensagemPublica });
+            return BadRequest(new { message = ex.Message });
         }
-    }
-
-    [HttpPost("negocios/analisar")]
-    [RequestSizeLimit(TamanhoMaximoArquivo)]
-    [Consumes("multipart/form-data")]
-    public IActionResult AnalisarPlanilha([FromForm] IFormFile arquivo)
-    {
-        if (arquivo is null || arquivo.Length == 0)
-            return BadRequest(new { message = "Selecione uma planilha XLSX para analisar." });
-
-        if (arquivo.Length > TamanhoMaximoArquivo)
-            return BadRequest(new { message = "A planilha deve ter no máximo 10 MB." });
-
-        if (!string.Equals(Path.GetExtension(arquivo.FileName), ".xlsx", StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "Formato inválido. Envie um arquivo com extensão .xlsx." });
-
-        try
+        catch (InvalidOperationException ex)
         {
-            using var stream = arquivo.OpenReadStream();
-            return Ok(_servico.Analisar(stream, arquivo.FileName));
+            return Conflict(new { message = ex.Message });
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            return UnprocessableEntity(new { message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Falha inesperada ao analisar a planilha de negócios.");
-            return StatusCode(500, new { message = "Não foi possível analisar a planilha." });
+            logger.LogError(ex, "Falha ao confirmar a importação de negócios.");
+            return StatusCode(500, new { message = "Não foi possível concluir a importação." });
         }
     }
 
     [HttpGet("historico")]
     public async Task<ActionResult<IReadOnlyList<ImportacaoOperacaoDto>>> ListarHistorico(
-        [FromQuery] int limite = 100,
-        CancellationToken ct = default)
-    {
-        var historico = await _operacoesServico.ListarHistoricoAsync(limite, ct);
-        return Ok(historico);
-    }
+        [FromQuery] int limite = 100, CancellationToken ct = default) =>
+        Ok(await operacoes.ListarHistoricoAsync(limite, ct));
 
-    [HttpGet("competencias/{competenciaAno:int}/{competenciaMes:int}/resumo")]
-    public async Task<ActionResult<CompetenciaResumoDto>> ConsultarCompetencia(
-        int competenciaAno,
-        int competenciaMes,
-        CancellationToken ct)
+    [HttpGet("meses-cobranca/{anoCobranca:int}/{mesCobranca:int}/resumo")]
+    public async Task<ActionResult<MesCobrancaResumoDto>> ConsultarMesCobranca(
+        int anoCobranca, int mesCobranca, CancellationToken ct)
     {
         try
         {
-            return Ok(await _operacoesServico.ConsultarCompetenciaAsync(
-                competenciaAno,
-                competenciaMes,
-                ct));
+            return Ok(await operacoes.ConsultarMesCobrancaAsync(anoCobranca, mesCobranca, ct));
         }
         catch (ArgumentException ex)
         {
@@ -151,45 +96,36 @@ public sealed class ImportacoesController : ControllerBase
         }
     }
 
-    [HttpDelete("competencias/{competenciaAno:int}/{competenciaMes:int}")]
-    public async Task<ActionResult<ExclusaoCompetenciaResultadoDto>> ExcluirCompetencia(
-        int competenciaAno,
-        int competenciaMes,
-        CancellationToken ct)
+    [HttpGet("competencias/{ano:int}/{mes:int}/resumo")]
+    public IActionResult ConsultarCompetenciaLegada() => StatusCode(410, new
     {
-        if (HttpContext.Items["UsuarioId"] is not long usuarioLogadoId)
-            return StatusCode(500, new { message = "Contexto de usuário não disponível." });
+        message = "Consulte o resumo por mês de cobrança em /api/importacoes/meses-cobranca/{ano}/{mes}/resumo.",
+    });
 
-        try
-        {
-            var resultado = await _operacoesServico.ExcluirCompetenciaAsync(
-                competenciaAno,
-                competenciaMes,
-                usuarioLogadoId,
-                ObterUsuarioNome(),
-                ct);
-            return Ok(resultado);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Falha ao excluir negócios da competência {Ano}/{Mes}.",
-                competenciaAno,
-                competenciaMes);
-            return StatusCode(500, new { message = "Não foi possível excluir os negócios desta competência." });
-        }
+    [HttpDelete("competencias/{ano:int}/{mes:int}")]
+    public IActionResult ExcluirCompetenciaLegada() => Conflict(new
+    {
+        message = "Para corrigir um mês, selecione a operação correspondente no assistente de importação.",
+    });
+
+    private static Stream AbrirPlanilha(IFormFile? arquivo)
+    {
+        if (arquivo is null || arquivo.Length == 0)
+            throw new ArgumentException("Selecione um arquivo Excel.");
+        if (arquivo.Length > TamanhoMaximoArquivo)
+            throw new ArgumentException("A planilha deve ter no máximo 10 MB.");
+        if (Path.GetExtension(arquivo.FileName).ToLowerInvariant() is not (".xls" or ".xlsx"))
+            throw new ArgumentException("Envie um arquivo .xls ou .xlsx.");
+        return arquivo.OpenReadStream();
     }
 
-    private string? ObterUsuarioNome()
+    public sealed class DadosImportacao
     {
-        if (HttpContext.Items["UsuarioAcesso"] is not UsuarioAcesso acesso)
-            return null;
-
-        return string.IsNullOrWhiteSpace(acesso.Nome) ? acesso.Username : acesso.Nome;
+        public IFormFile Arquivo { get; set; } = null!;
+        public int MesCobranca { get; set; }
+        public int AnoCobranca { get; set; }
+        public string Modo { get; set; } = "adicionar";
+        public long[] Participantes { get; set; } = [];
+        public string? Revisao { get; set; }
     }
 }

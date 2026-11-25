@@ -36,10 +36,13 @@ export interface CriarNegocioPayload {
 
 export interface NegocioDto {
   publicId: string;
+  clientePublicId: string;
+  idadeCliente?: number | null;
   valor: number;
   referencia?: string;
   competenciaMes: number;
   competenciaAno: number;
+  mesesCobranca: string[];
   origem?: string;
   notas?: string;
   dataVencimento?: string;
@@ -53,16 +56,32 @@ export interface NegocioDto {
   atividadesCount: number;
 }
 
+export interface NegocioImportacaoDto {
+  publicId: string;
+  mesCobranca: number;
+  anoCobranca: number;
+  nomeArquivo?: string;
+  dataHora: string;
+  aba: string;
+  linha: number;
+  encerrado: boolean;
+}
 
-// ─── API Calls ────────────────────────────────────────────────────────────────
-
-export async function listarEtapas(): Promise<EtapaDto[]> {
-  const { data } = await api.get<EtapaDto[]>('/api/negocios/etapas');
+export async function listarImportacoesNegocio(publicId: string): Promise<NegocioImportacaoDto[]> {
+  const { data } = await api.get<NegocioImportacaoDto[]>(`/api/negocios/${publicId}/importacoes`);
   return data;
 }
 
-export async function listarNegocios(): Promise<NegocioDto[]> {
-  const { data } = await api.get<NegocioDto[]>('/api/negocios');
+
+// ─── API Calls ────────────────────────────────────────────────────────────────
+
+export async function listarEtapas(signal?: AbortSignal): Promise<EtapaDto[]> {
+  const { data } = await api.get<EtapaDto[]>('/api/negocios/etapas', { signal });
+  return data;
+}
+
+export async function listarNegocios(signal?: AbortSignal): Promise<NegocioDto[]> {
+  const { data } = await api.get<NegocioDto[]>('/api/negocios', { signal });
   return data;
 }
 

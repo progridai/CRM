@@ -5,6 +5,7 @@ import { formatCurrency } from '../../utils';
 import type { NegocioDto } from '../../services/negociosService';
 import {
   computeIndicators,
+  formatarPeriodo,
   getCompetenceValue,
   type NegociosFilters,
 } from './negociosIndicators';
@@ -19,12 +20,8 @@ interface NegociosHeaderProps {
   onFiltersChange: (filters: NegociosFilters) => void;
   sortMode: NegociosSort;
   onSortModeChange: (sortMode: NegociosSort) => void;
+  carregando?: boolean;
 }
-
-const MESES_ABREV = [
-  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
-];
 
 export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
   viewMode,
@@ -36,20 +33,19 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
   onFiltersChange,
   sortMode,
   onSortModeChange,
+  carregando = false,
 }) => {
-  const ind = computeIndicators(negocios);
+  const ind = useMemo(() => computeIndicators(negocios), [negocios]);
 
-  const competenceOptions = useMemo(() => {
-    const options = new Map<string, string>();
-    todosNegocios.forEach((negocio) => {
-      const value = getCompetenceValue(negocio);
-      const month = MESES_ABREV[negocio.competenciaMes - 1] ?? String(negocio.competenciaMes);
-      options.set(value, `${month}/${negocio.competenciaAno}`);
-    });
-    return [...options.entries()]
-      .sort(([valueA], [valueB]) => valueB.localeCompare(valueA))
-      .map(([value, label]) => ({ value, label }));
-  }, [todosNegocios]);
+  const competenceOptions = useMemo(
+    () => [...new Set(todosNegocios.map(getCompetenceValue))].sort().reverse(),
+    [todosNegocios],
+  );
+
+  const mesesCobranca = useMemo(
+    () => [...new Set(todosNegocios.flatMap((negocio) => negocio.mesesCobranca))].sort().reverse(),
+    [todosNegocios],
+  );
 
   const originOptions = useMemo(
     () => [...new Set(todosNegocios.map((negocio) => negocio.origem).filter(Boolean) as string[])]
@@ -81,7 +77,22 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
           </div>
 
           <label className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
-            <span className="text-xs text-slate-400 whitespace-nowrap">Competência:</span>
+            <span className="text-xs text-slate-400 whitespace-nowrap">Mês de Cobrança</span>
+            <select
+              aria-label="Filtrar por mês de cobrança"
+              value={filters.mesCobranca}
+              onChange={(event) => onFiltersChange({ ...filters, mesCobranca: event.target.value })}
+              className="text-xs font-semibold text-slate-800 dark:text-slate-100 bg-transparent outline-none cursor-pointer"
+            >
+              <option value="Todos">Todos</option>
+              {mesesCobranca.map((periodo) => (
+                <option key={periodo} value={periodo}>{formatarPeriodo(periodo)}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
+            <span className="text-xs text-slate-400 whitespace-nowrap">Competência</span>
             <select
               aria-label="Filtrar por competência"
               value={filters.competence}
@@ -89,8 +100,8 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
               className="text-xs font-semibold text-slate-800 dark:text-slate-100 bg-transparent outline-none cursor-pointer"
             >
               <option value="Todas">Todas</option>
-              {competenceOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+              {competenceOptions.map((periodo) => (
+                <option key={periodo} value={periodo}>{formatarPeriodo(periodo)}</option>
               ))}
             </select>
           </label>
@@ -138,6 +149,7 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
               <option value="name-desc">Nome Z–A</option>
               <option value="value-desc">Maior valor</option>
               <option value="value-asc">Menor valor</option>
+              {viewMode === 'kanban' && <option value="parcelas-desc">Mais parcelas</option>}
             </select>
           </label>
         </div>
@@ -184,7 +196,13 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
       </div>
 
       {/* ── Indicator Cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      {carregando ? (
+        <div aria-hidden="true" className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 5 }, (_, indice) => (
+            <div key={indice} className="h-[84px] rounded-xl border border-slate-200 bg-slate-100 motion-safe:animate-pulse dark:border-slate-800 dark:bg-slate-900" />
+          ))}
+        </div>
+      ) : <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
 
         {/* 1 — Saldo a Recuperar */}
         <div className="bg-white dark:bg-slate-900/90 p-3 px-4 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-col gap-1">
@@ -253,7 +271,7 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
             />
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

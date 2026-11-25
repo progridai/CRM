@@ -1,9 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ExternalLink, MessageCircle } from 'lucide-react';
 import type { EtapaDto, NegocioDto } from '../../services/negociosService';
 import { formatCurrency, getNameInitial } from '../../utils';
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 import type { NegociosSort } from '../../types';
+import { formatarPeriodo, getCompetenceValue } from './negociosIndicators';
+import { PaginacaoNegocios } from './PaginacaoNegocios';
+
+const POR_PAGINA = 60;
+const compararNomes = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true }).compare;
 
 interface NegociosListViewProps {
   negocios: NegocioDto[];
@@ -40,6 +45,7 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
   sortMode,
 }) => {
   const { getWhatsAppLink } = useWhatsAppLink();
+  const [paginaAtual, setPagina] = useState(0);
   const sortedNegocios = useMemo(() => {
     return [...negocios].sort((first, second) => {
       if (sortMode === 'value-desc' || sortMode === 'value-asc') {
@@ -48,10 +54,7 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
           : first.valor - second.valor;
       }
 
-      const comparison = first.nomeCliente.localeCompare(second.nomeCliente, 'pt-BR', {
-        sensitivity: 'base',
-        numeric: true,
-      });
+      const comparison = compararNomes(first.nomeCliente, second.nomeCliente);
       return sortMode === 'name-desc' ? -comparison : comparison;
     });
   }, [negocios, sortMode]);
@@ -64,8 +67,12 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
     );
   }
 
+  const pagina = Math.min(paginaAtual, Math.ceil(sortedNegocios.length / POR_PAGINA) - 1);
+  const inicio = pagina * POR_PAGINA;
+
   return (
     <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+      <PaginacaoNegocios pagina={pagina} porPagina={POR_PAGINA} total={sortedNegocios.length} unidade="negócios" onChange={setPagina} />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1120px] border-collapse text-left text-xs">
           <thead>
@@ -74,6 +81,7 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
               <th className="p-3">Telefone</th>
               <th className="p-3">Documento</th>
               <th className="p-3">Origem</th>
+              <th className="p-3">Competência</th>
               <th className="p-3">Valor do Débito</th>
               <th className="p-3">Etapa do Pipeline</th>
               <th className="p-3">Responsável</th>
@@ -81,7 +89,7 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {sortedNegocios.map((negocio) => {
+            {sortedNegocios.slice(inicio, inicio + POR_PAGINA).map((negocio) => {
               const etapaAtual = etapas.find((etapa) => etapa.codigo === negocio.etapaCodigo);
               const stageColor = etapaAtual?.corHex || '#64748b';
               const nomeOperador = negocio.nomeOperador?.trim() || 'Sem responsável';
@@ -129,6 +137,10 @@ export const NegociosListView: React.FC<NegociosListViewProps> = ({
 
                   <td className="max-w-[180px] truncate p-3 text-slate-600 dark:text-slate-300" title={negocio.origem || undefined}>
                     {negocio.origem || '—'}
+                  </td>
+
+                  <td className="p-3 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                    {formatarPeriodo(getCompetenceValue(negocio))}
                   </td>
 
                   <td className="p-3 font-bold text-slate-900 dark:text-slate-100">

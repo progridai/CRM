@@ -23,3 +23,4 @@ Write-Host ""
 
 Set-Location $BackendPath
 dotnet run --project "ProgridPlus.Api" --urls "http://localhost:5200"
+exit $LASTEXITCODE

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2, ChevronRight, UserRound } from 'lucide-react';
-import type { NegocioDto, EtapaDto } from '../../services/negociosService';
+import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2, ChevronRight, UserRound, ExternalLink } from 'lucide-react';
+import { getWebApoliceClienteUrl } from '../../config/webApolice';
+import { listarImportacoesNegocio, type NegocioDto, type EtapaDto, type NegocioImportacaoDto } from '../../services/negociosService';
 import { DealHistoryTimeline } from './DealHistoryTimeline';
+import { formatarPeriodo, getCompetenceValue } from './negociosIndicators';
 import { getNameInitial } from '../../utils';
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 
@@ -40,6 +42,8 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
 
   const [historico, setHistorico] = useState<any[]>([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [cargas, setCargas] = useState<{ negocioId: string; itens?: NegocioImportacaoDto[] }>();
+  const negocioId = negocio?.publicId;
 
   const loadAtividades = async () => {
     if (!negocio) return;
@@ -81,6 +85,15 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
       loadHistorico();
     }
   }, [isOpen, negocio?.publicId]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'historico' || !negocioId) return;
+    let ativo = true;
+    listarImportacoesNegocio(negocioId)
+      .then((itens) => { if (ativo) setCargas({ negocioId, itens }); })
+      .catch(() => { if (ativo) setCargas({ negocioId }); });
+    return () => { ativo = false; };
+  }, [isOpen, activeTab, negocioId]);
 
   const handleRegistrarAtividade = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,10 +251,16 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
             <div className="flex flex-col gap-6">
             {/* Resumo Cadastral Grid */}
             <section className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   Dados Operacionais
                 </span>
+                {negocio.clientePublicId && (
+                  <a href={getWebApoliceClienteUrl(negocio.clientePublicId)} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-slate-700 dark:text-indigo-400 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/50">
+                    Ver Cadastro <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 bg-slate-50/80 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800">
@@ -290,12 +309,30 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Competência</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      {negocio.competenciaMes && negocio.competenciaAno 
-                        ? `${['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][negocio.competenciaMes - 1]}/${negocio.competenciaAno}`
-                        : '—'}
+                      {formatarPeriodo(getCompetenceValue(negocio))}
                     </span>
                   </div>
                 </div>
+
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Meses de cobrança</span>
+                  <span className="mt-0.5 text-xs font-medium text-slate-800 dark:text-slate-200">
+                    {negocio.mesesCobranca.map(formatarPeriodo).join(', ') || 'Sem vínculos com cargas'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Idade</span>
+                  <span className="mt-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    {negocio.idadeCliente == null ? 'Não informado' : `${negocio.idadeCliente} ${negocio.idadeCliente === 1 ? 'ano' : 'anos'}`}
+                  </span>
+                </div>
+
+                <label className="col-span-2 flex flex-col text-[11px] text-slate-500 dark:text-slate-400">
+                  ID Negócio CRM
+                  <input readOnly value={negocio.publicId} onFocus={(event) => event.currentTarget.select()}
+                    className="mt-0.5 w-full rounded border border-slate-200 bg-transparent px-2 py-1 font-mono text-xs dark:border-slate-700 dark:text-slate-200" />
+                </label>
 
                 {/* Data de Vencimento */}
                 <div className="flex flex-col">
@@ -586,6 +623,27 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
 
           {activeTab === 'historico' && (
             <div className="flex flex-col gap-4">
+              <section aria-live="polite" className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">Importações da parcela</h3>
+                {cargas?.negocioId !== negocio.publicId ? (
+                  <p className="mt-2 text-xs text-slate-500">Carregando importações…</p>
+                ) : !cargas.itens ? (
+                  <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">Não foi possível carregar as importações.</p>
+                ) : cargas.itens.length === 0 ? (
+                  <p className="mt-2 text-xs text-slate-500">Sem vínculos com cargas.</p>
+                ) : (
+                  <ul className="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+                    {cargas.itens.map((carga) => (
+                      <li key={carga.publicId} className="py-2 text-xs text-slate-500 dark:text-slate-400">
+                        <p className="break-words font-semibold text-slate-800 dark:text-slate-200">
+                          {String(carga.mesCobranca).padStart(2, '0')}/{carga.anoCobranca} · {carga.nomeArquivo || 'Carga'}
+                        </p>
+                        <p>{new Date(carga.dataHora).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} · {carga.aba}, linha {carga.linha}{carga.encerrado ? ' · Vínculo encerrado' : ''}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
               {loadingHistorico ? (
                 <div className="py-10 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />

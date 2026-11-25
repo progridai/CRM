@@ -8,6 +8,7 @@ import {
   type WhatsAppDisparoResumoDto,
 } from '../services/whatsappService';
 import { WhatsAppDisparoModal } from '../components/WhatsApp/WhatsAppDisparoModal';
+import { formatarPeriodo } from '../components/Negocios/negociosIndicators';
 
 const statusMeta: Record<string, { label: string; className: string }> = {
   pendente: { label: 'Pendente', className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
@@ -29,6 +30,7 @@ export const WhatsAppPage: React.FC = () => {
   const [etapas, setEtapas] = useState<EtapaDto[]>([]);
   const [disparos, setDisparos] = useState<WhatsAppDisparoResumoDto[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [mesCobranca, setMesCobranca] = useState('');
   const [search, setSearch] = useState('');
   const [operator, setOperator] = useState('todos');
   const [stage, setStage] = useState('todas');
@@ -63,21 +65,42 @@ export const WhatsAppPage: React.FC = () => {
     negocios.map((item) => item.nomeOperador?.trim()).filter((name): name is string => Boolean(name)),
   )).sort((a, b) => a.localeCompare(b, 'pt-BR')), [negocios]);
 
-  const stageCounts = useMemo(() => negocios.reduce<Record<string, number>>((counts, item) => {
+  const mesesCobranca = useMemo(() => {
+    const meses = new Set(negocios.flatMap((item) => item.mesesCobranca ?? []));
+    if (mesCobranca) meses.add(mesCobranca);
+    return [...meses].sort().reverse();
+  }, [negocios, mesCobranca]);
+
+  const negociosDoMes = useMemo(() => mesCobranca
+    ? negocios.filter((item) => item.mesesCobranca?.includes(mesCobranca))
+    : negocios, [negocios, mesCobranca]);
+
+  const stageCounts = useMemo(() => negociosDoMes.reduce<Record<string, number>>((counts, item) => {
     counts[item.etapaCodigo] = (counts[item.etapaCodigo] ?? 0) + 1;
     return counts;
-  }, {}), [negocios]);
+  }, {}), [negociosDoMes]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR');
-    return negocios.filter((item) => {
+    return negociosDoMes.filter((item) => {
       const matchesStage = stage === 'todas' || item.etapaCodigo === stage;
       const matchesOperator = operator === 'todos' || item.nomeOperador === operator;
       const matchesSearch = !term || [item.nomeCliente, item.documento, item.telefonePrincipal, item.referencia]
         .some((value) => value?.toLocaleLowerCase('pt-BR').includes(term));
       return matchesStage && matchesOperator && matchesSearch;
     });
-  }, [negocios, operator, search, stage]);
+  }, [negociosDoMes, operator, search, stage]);
+
+  const selectedIdsDoMes = useMemo(() => {
+    const idsDoMes = new Set(negociosDoMes.map((item) => item.publicId));
+    return selectedIds.filter((id) => idsDoMes.has(id));
+  }, [negociosDoMes, selectedIds]);
+
+  const changeMesCobranca = (value: string) => {
+    setMesCobranca(value);
+    setSelectedIds([]);
+    setModalOpen(false);
+  };
 
   const changeStage = (value: string) => {
     setStage(value);
@@ -129,18 +152,30 @@ export const WhatsAppPage: React.FC = () => {
         <div className="flex min-h-[420px] items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin text-emerald-600" />Carregando…</div>
       ) : activeTab === 'novo' ? (
         <section className="flex h-[calc(100dvh-17rem)] min-h-[520px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 dark:border-slate-800 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 dark:border-slate-800 xl:flex-row xl:items-center xl:justify-between">
             <div><h2 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">Selecionar negócios</h2><p className="mt-0.5 text-[11px] text-slate-500">Escolha uma fila do Kanban. Telefones repetidos serão enviados uma única vez.</p></div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_190px_190px]">
-              <div className="relative sm:col-span-2 lg:col-span-1"><Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, documento ou telefone" className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" /></div>
-              <select aria-label="Filtrar por fila do Kanban" value={stage} onChange={(e) => changeStage(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="todas">Todas as filas ({negocios.length})</option>{etapas.map((etapa) => <option key={etapa.publicId} value={etapa.codigo}>{etapa.nome} ({stageCounts[etapa.codigo] ?? 0})</option>)}</select>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[180px_minmax(180px,1fr)_160px_170px] 2xl:grid-cols-[180px_minmax(220px,1fr)_190px_190px]">
+              <select
+                aria-label="Filtrar por mês de cobrança"
+                title="Mês de cobrança"
+                value={mesCobranca}
+                onChange={(event) => changeMesCobranca(event.target.value)}
+                className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+              >
+                <option value="">Todos os meses de cobrança</option>
+                {mesesCobranca.map((periodo) => (
+                  <option key={periodo} value={periodo}>{formatarPeriodo(periodo)}</option>
+                ))}
+              </select>
+              <div className="relative"><Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, documento ou telefone" className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" /></div>
+              <select aria-label="Filtrar por fila do Kanban" value={stage} onChange={(e) => changeStage(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="todas">Todas as filas ({negociosDoMes.length})</option>{etapas.map((etapa) => <option key={etapa.publicId} value={etapa.codigo}>{etapa.nome} ({stageCounts[etapa.codigo] ?? 0})</option>)}</select>
               <select aria-label="Filtrar por operador" value={operator} onChange={(e) => changeOperator(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"><option value="todos">Todos os operadores</option>{operators.map((name) => <option key={name} value={name}>{name}</option>)}</select>
             </div>
           </div>
 
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/30">
             <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} className="h-4 w-4 rounded accent-emerald-600" />Selecionar os {filtered.length} exibidos</label>
-            <div className="flex items-center gap-3"><span className="text-[11px] font-semibold text-slate-500">{selectedIds.length} selecionado(s)</span><button type="button" onClick={() => setModalOpen(true)} disabled={selectedIds.length === 0} className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"><Send className="h-3.5 w-3.5" />Revisar disparo</button></div>
+            <div className="flex items-center gap-3"><span className="text-[11px] font-semibold text-slate-500">{selectedIdsDoMes.length} selecionado(s)</span><button type="button" onClick={() => setModalOpen(true)} disabled={selectedIdsDoMes.length === 0} className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"><Send className="h-3.5 w-3.5" />Revisar disparo</button></div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto custom-scrollbar">
@@ -180,7 +215,7 @@ export const WhatsAppPage: React.FC = () => {
         </section>
       )}
 
-      <WhatsAppDisparoModal isOpen={modalOpen} negocioIds={selectedIds} tipo="massa" onClose={() => setModalOpen(false)} onCompleted={() => { setSelectedIds([]); void carregar(); }} />
+      <WhatsAppDisparoModal isOpen={modalOpen} negocioIds={selectedIdsDoMes} tipo="massa" onClose={() => setModalOpen(false)} onCompleted={() => { setSelectedIds([]); void carregar(); }} />
 
       {(detail || loadingDetail) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={() => setDetail(null)}>
