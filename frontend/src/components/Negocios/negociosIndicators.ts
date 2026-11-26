@@ -4,7 +4,7 @@ export interface NegociosFilters {
   search: string;
   mesCobranca: string;
   competence: string;
-  origin: string;
+  origins: string[];
   owner: string;
 }
 
@@ -12,7 +12,7 @@ export const DEFAULT_NEGOCIOS_FILTERS: NegociosFilters = {
   search: '',
   mesCobranca: 'Todos',
   competence: 'Todas',
-  origin: 'Todas',
+  origins: [],
   owner: 'Todos',
 };
 
@@ -35,6 +35,7 @@ export function filterNegocios(
   filters: NegociosFilters,
 ): NegocioDto[] {
   const search = normalizeSearchValue(filters.search.trim());
+  const origins = new Set(filters.origins);
 
   return negocios.filter((negocio) => {
     const matchesSearch = !search || [
@@ -52,8 +53,8 @@ export function filterNegocios(
       negocio.mesesCobranca.includes(filters.mesCobranca);
 
     const matchesOrigin =
-      filters.origin === 'Todas' ||
-      (negocio.origem ?? '').includes(filters.origin);
+      origins.size === 0 ||
+      (negocio.origem != null && origins.has(negocio.origem));
 
     const matchesOwner =
       filters.owner === 'Todos' || negocio.nomeOperador === filters.owner;

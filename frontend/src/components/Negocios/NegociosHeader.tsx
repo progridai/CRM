@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ArrowUpDown, Search, Kanban, List, Plus } from 'lucide-react';
+import { NegociosOriginFilter } from './NegociosOriginFilter';
 import type { NegociosSort, ViewMode } from '../../types';
 import { formatCurrency } from '../../utils';
 import type { NegocioDto } from '../../services/negociosService';
@@ -62,7 +63,7 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
   return (
     <div className="flex flex-col gap-5 w-full mb-6">
       {/* Top Filter & Toolbar Bar */}
-      <div className="bg-white dark:bg-slate-900/90 p-3 rounded-2xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+      <div className="relative bg-white dark:bg-slate-900/90 p-3 rounded-2xl shadow-2xs border border-slate-200/80 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
         {/* Left: Search input */}
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="relative">
@@ -106,20 +107,11 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
             </select>
           </label>
 
-          <label className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
-            <span className="text-xs text-slate-400 whitespace-nowrap">Origem:</span>
-            <select
-              aria-label="Filtrar por origem"
-              value={filters.origin}
-              onChange={(event) => onFiltersChange({ ...filters, origin: event.target.value })}
-              className="max-w-36 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-transparent outline-none cursor-pointer"
-            >
-              <option value="Todas">Todas</option>
-              {originOptions.map((origin) => (
-                <option key={origin} value={origin}>{origin}</option>
-              ))}
-            </select>
-          </label>
+          <NegociosOriginFilter
+            options={originOptions}
+            selected={filters.origins}
+            onChange={(origins) => onFiltersChange({ ...filters, origins })}
+          />
 
           <label className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80">
             <span className="text-xs text-slate-400 whitespace-nowrap">Operador:</span>
