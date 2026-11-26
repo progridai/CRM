@@ -130,7 +130,8 @@ export const NegociosPage: React.FC = () => {
   }, [negocios, etapas, carregarDados]);
 
   return (
-    <div className="h-full flex flex-col w-full">
+    // O AppLayout reserva 5rem acima do conteúdo e 3rem abaixo.
+    <div className={`flex w-full flex-col ${viewMode === 'kanban' ? 'h-[calc(100dvh-8rem)]' : 'h-full'}`}>
       <NegociosHeader
         viewMode={viewMode}
         setViewMode={setViewMode}

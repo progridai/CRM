@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, X, Phone, MessageCircle, MessageSquare, Plus, FileText, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, X, Phone, MessageCircle, MessageSquare, Plus, FileText, CreditCard, ChevronLeft } from 'lucide-react';
 import { listarAtividades, registrarAtividade, type AtividadeDto, type EtapaDto, type NegocioDto } from '../../services/negociosService';
 import { useQuickActivityTemplates } from '../../hooks/useQuickActivityTemplates';
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
@@ -55,8 +55,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
   const [newActivityDescription, setNewActivityDescription] = useState('');
   const [activityError, setActivityError] = useState<string | null>(null);
   const activityPanelRef = useRef<HTMLDivElement>(null);
-  const boardRef = useRef<HTMLDivElement>(null);
-  const [navigation, setNavigation] = useState({ previous: false, next: false });
 
   let primeiroMesRecente = 0;
   if (sortMode === 'competencias-antigas-desc') {
@@ -104,37 +102,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
     }));
   }, [negocios, etapas, sortMode, primeiroMesRecente]);
 
-  useEffect(() => {
-    const board = boardRef.current;
-    if (!board) return;
-    const updateNavigation = () => {
-      const previous = board.scrollLeft > 1;
-      const next = board.scrollLeft + board.clientWidth < board.scrollWidth - 1;
-      setNavigation(current => current.previous === previous && current.next === next
-        ? current : { previous, next });
-    };
-    const observer = new ResizeObserver(updateNavigation);
-    observer.observe(board);
-    if (board.firstElementChild) observer.observe(board.firstElementChild);
-    board.addEventListener('scroll', updateNavigation, { passive: true });
-    updateNavigation();
-    return () => {
-      observer.disconnect();
-      board.removeEventListener('scroll', updateNavigation);
-    };
-  }, [etapas.length]);
-
-  const navigateColumns = (direction: number) => {
-    setOpenGroup(null);
-    const board = boardRef.current;
-    if (!board) return;
-    const column = board.firstElementChild?.firstElementChild;
-    const step = column?.getBoundingClientRect().width || 346;
-    board.scrollBy({
-      left: direction * step,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-    });
-  };
   const [panelAnchor, setPanelAnchor] = useState({ x: 0, y: 0 });
 
   const anchorAtClick = (event: React.MouseEvent) => {
@@ -286,22 +253,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
   };
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <nav aria-label="Navegação das colunas do Kanban" className="mb-3 flex items-center justify-end gap-2">
-        <span className="mr-1 text-xs text-slate-500 dark:text-slate-400">Navegar pelas etapas</span>
-        <button type="button" onClick={() => navigateColumns(-1)} disabled={!navigation.previous}
-          aria-label="Ver colunas anteriores" title="Colunas anteriores" aria-controls="kanban-columns"
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-default disabled:opacity-30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        </button>
-        <button type="button" onClick={() => navigateColumns(1)} disabled={!navigation.next}
-          aria-label="Ver próximas colunas" title="Próximas colunas" aria-controls="kanban-columns"
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-default disabled:opacity-30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </button>
-      </nav>
-    <div ref={boardRef} id="kanban-columns" tabIndex={0} aria-label="Colunas do Kanban" className="flex-1 overflow-x-auto overflow-y-hidden -mx-4 px-4 sm:mx-0 sm:px-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-      <div className="-mx-2 flex min-h-[500px] items-stretch pb-4">
+    <div
+      id="kanban-columns"
+      role="region"
+      tabIndex={0}
+      aria-label="Colunas do Kanban"
+      className="kanban-horizontal-scrollbar -mx-4 min-h-64 min-w-0 flex-1 overflow-x-auto overflow-y-hidden px-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:mx-0 sm:px-0"
+    >
+      <div className="-ml-2 flex h-full w-max min-w-full items-stretch">
         {etapas.map((etapa) => {
           const { grupos, totalValor, quantidade } = colunas.get(etapa.codigo) ?? { grupos: [], totalValor: 0, quantidade: 0 };
 
@@ -314,7 +273,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
           return (
             <div
               key={etapa.codigo}
-              className="w-[346px] flex-shrink-0 self-stretch px-2"
+              className="flex w-[346px] shrink-0 px-2"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, etapa.codigo)}
               aria-label={`Área de destino da etapa ${etapa.nome}`}
@@ -324,7 +283,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                 className="flex w-full flex-col gap-3 rounded-2xl border border-slate-200/60 p-2 transition-colors dark:border-slate-800/80"
               >
               {/* Column Header */}
-              <div className="flex items-center justify-between px-2 py-1.5 gap-2">
+              <div className="flex shrink-0 items-center justify-between gap-2 px-2 py-1.5">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <h2
                     className="font-display text-xs font-bold text-slate-800 dark:text-slate-200 tracking-tight whitespace-nowrap"
@@ -345,9 +304,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
               </div>
 
               {/* Área de Cards */}
-              <div className="flex flex-col gap-2.5 min-h-[150px]">
+              <div
+                role="region"
+                aria-label={`Negócios em ${etapa.nome}`}
+                tabIndex={quantidade > 0 ? 0 : undefined}
+                className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-y-contain rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+              >
                 {quantidade === 0 ? (
-                  <div className="flex-1 rounded-xl border-2 border-dashed border-slate-300/50 dark:border-slate-700/50 bg-white/30 dark:bg-slate-900/20 flex items-center justify-center min-h-[100px]">
+                  <div className="flex h-36 shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-slate-300/50 bg-white/30 dark:border-slate-700/50 dark:bg-slate-900/20">
                     <span className="text-xs font-medium text-slate-400 dark:text-slate-500">
                       Nenhum negócio
                     </span>
@@ -362,7 +326,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                           key={chave}
                           draggable
                           onDragStart={(e) => handleDragStart(e, idsGrupo)}
-                          className="group/card relative bg-white dark:bg-slate-900/90 p-3 rounded-xl shadow-2xs hover:shadow-md transition-all duration-150 border border-slate-200/80 dark:border-slate-800/90 hover:border-slate-300 dark:hover:border-slate-700 flex flex-col gap-2 cursor-grab active:cursor-grabbing"
+                          className="group/card relative bg-white dark:bg-slate-900/90 p-3 rounded-xl shadow-2xs hover:shadow-md transition-all duration-150 border border-slate-200/80 dark:border-slate-800/90 hover:border-slate-300 dark:hover:border-slate-700 flex shrink-0 flex-col gap-2 cursor-grab active:cursor-grabbing"
                         >
                           {/* Cabeçalho do Grupo */}
                           <div
@@ -882,7 +846,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
           </div>
         )}
       </div>
-    </div>
     </div>
   );
 };
