@@ -40,7 +40,12 @@ export const NegociosPage: React.FC = () => {
 
   const filtrosAplicados = useDeferredValue(filters);
   const negociosFiltrados = useMemo(() => filterNegocios(negocios, filtrosAplicados), [negocios, filtrosAplicados]);
-  const ordenacaoDaVista = viewMode === 'list' && sortMode === 'parcelas-desc' ? 'name-asc' : sortMode;
+  const clienteSelecionadoId = selectedNegocio?.clientePublicId;
+  const negociosCliente = useMemo(() => clienteSelecionadoId
+    ? negocios.filter(negocio => negocio.clientePublicId === clienteSelecionadoId)
+    : [], [clienteSelecionadoId, negocios]);
+  const ordenacaoDoKanban = sortMode === 'parcelas-desc' || sortMode === 'competencias-antigas-desc';
+  const ordenacaoDaVista = viewMode === 'list' && ordenacaoDoKanban ? 'name-asc' : sortMode;
   const chaveVisualizacao = JSON.stringify([filtrosAplicados, ordenacaoDaVista]);
 
   // ── Carregamento das etapas e negócios ─────────────────────────────────────
@@ -158,7 +163,6 @@ export const NegociosPage: React.FC = () => {
         </div>
       ) : viewMode === 'kanban' ? (
         <KanbanBoard 
-          key={chaveVisualizacao}
           etapas={etapas} 
           negocios={negociosFiltrados}
           onCardClick={setSelectedNegocio} 
@@ -191,6 +195,8 @@ export const NegociosPage: React.FC = () => {
       <NegocioDetalhesDrawer
         isOpen={!!selectedNegocio}
         negocio={selectedNegocio}
+        negociosCliente={negociosCliente}
+        mesCobrancaDaTela={filtrosAplicados.mesCobranca}
         etapas={etapas}
         onClose={() => setSelectedNegocio(null)}
         onAtividadeRegistrada={carregarDados}

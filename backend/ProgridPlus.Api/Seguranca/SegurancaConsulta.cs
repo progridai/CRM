@@ -17,6 +17,8 @@ public sealed class SegurancaConsulta
             ?? throw new InvalidOperationException("Missing DefaultConnection string");
     }
 
+    private const string PermissaoAssertiva = "crm.assertiva.utilizar";
+
     private const string QueryAcessoCrm = """
         SELECT
             u.id            AS UsuarioId,
@@ -53,9 +55,33 @@ public sealed class SegurancaConsulta
                   AND r.ativo  = true
                   AND m.ativo  = true
                   AND pm.codigo = 'crm.acessar'
-            ) AS TemPermissaoCrm
+            ) AS TemPermissaoCrm,
+
+            assertiva.id IS NOT NULL AS AssertivaDisponivel,
+
+            EXISTS (
+                SELECT 1
+                FROM seguranca.usuario_perfil up
+                JOIN seguranca.perfil p ON p.id = up.perfil_id
+                JOIN seguranca.perfil_permissao pp ON pp.perfil_id = p.id
+                WHERE up.usuario_id = u.id
+                  AND p.ativo = true
+                  AND pp.permissao_id = assertiva.id
+            ) AS TemPermissaoAssertiva
 
         FROM seguranca.usuario u
+        LEFT JOIN (
+            SELECT pm.id
+            FROM seguranca.permissao pm
+            JOIN seguranca.recurso r ON r.id = pm.recurso_id
+            JOIN seguranca.modulo m ON m.id = r.modulo_id
+            WHERE pm.codigo = @permissaoAssertiva
+              AND pm.ativo = true
+              AND r.codigo = 'ASSERTIVA'
+              AND r.ativo = true AND r.habilitado = true
+              AND m.codigo = 'CRM'
+              AND m.ativo = true AND m.habilitado = true
+        ) assertiva ON true
         WHERE u.keycloak_sub = @sub;
         """;
 
@@ -133,7 +159,7 @@ public sealed class SegurancaConsulta
         // CommandDefinition permite passar o CancellationToken ao Dapper
         var cmd = new CommandDefinition(
             QueryAcessoCrm,
-            parameters: new { sub },
+            parameters: new { sub, permissaoAssertiva = PermissaoAssertiva },
             cancellationToken: ct);
 
         var row = await conn.QuerySingleOrDefaultAsync<UsuarioAcessoRow>(cmd);
@@ -148,7 +174,9 @@ public sealed class SegurancaConsulta
             row.Username ?? string.Empty,
             row.Ativo,
             row.AcessoTotal,
-            row.TemPermissaoCrm);
+            row.TemPermissaoCrm,
+            row.AssertivaDisponivel,
+            row.TemPermissaoAssertiva);
     }
 
     // Classe interna para o mapeamento do Dapper (nomes case-insensitive)
@@ -161,5 +189,7 @@ public sealed class SegurancaConsulta
         public bool Ativo { get; init; }
         public bool AcessoTotal { get; init; }
         public bool TemPermissaoCrm { get; init; }
+        public bool AssertivaDisponivel { get; init; }
+        public bool TemPermissaoAssertiva { get; init; }
     }
 }

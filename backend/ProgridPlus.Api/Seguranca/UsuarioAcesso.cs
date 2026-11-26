@@ -11,7 +11,9 @@ public sealed record UsuarioAcesso(
     string Username,
     bool Ativo,
     bool AcessoTotal,
-    bool TemPermissaoCrm
+    bool TemPermissaoCrm,
+    bool AssertivaDisponivel,
+    bool TemPermissaoAssertiva
 )
 {
     /// <summary>
@@ -20,4 +22,7 @@ public sealed record UsuarioAcesso(
     /// </summary>
     public bool PodeAcessarCrm =>
         Ativo && (AcessoTotal || TemPermissaoCrm);
+
+    public bool PodeUsarAssertiva =>
+        PodeAcessarCrm && AssertivaDisponivel && (AcessoTotal || TemPermissaoAssertiva);
 }

@@ -8,9 +8,10 @@ namespace ProgridPlus.Api.Auth;
 /// Marker que representa o requisito de acesso ao CRM.
 /// Registrado como policy "CrmAcesso".
 /// </summary>
-public sealed class CrmAcessoRequirement(bool exigirAcessoTotal = false) : IAuthorizationRequirement
+public sealed class CrmAcessoRequirement(bool exigirAcessoTotal = false, bool exigirAssertiva = false) : IAuthorizationRequirement
 {
     public bool ExigirAcessoTotal { get; } = exigirAcessoTotal;
+    public bool ExigirAssertiva { get; } = exigirAssertiva;
 }
 
 /// <summary>
@@ -91,6 +92,13 @@ public sealed class CrmAcessoHandler(
             logger.LogWarning(
                 "CrmAcessoHandler: usuário {UsuarioId} tentou acessar recurso administrativo sem acesso_total.",
                 acesso.UsuarioId);
+            context.Fail();
+            return;
+        }
+
+        if (requirement.ExigirAssertiva && !acesso.PodeUsarAssertiva)
+        {
+            logger.LogWarning("CrmAcessoHandler: acesso à Assertiva negado para o usuário {UsuarioId}.", acesso.UsuarioId);
             context.Fail();
             return;
         }

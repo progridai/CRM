@@ -3,12 +3,15 @@ import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, Credit
 import { getWebApoliceClienteUrl } from '../../config/webApolice';
 import { listarImportacoesNegocio, type NegocioDto, type EtapaDto, type NegocioImportacaoDto } from '../../services/negociosService';
 import { DealHistoryTimeline } from './DealHistoryTimeline';
+import { NegociosDoCliente } from './NegociosDoCliente';
 import { formatarPeriodo, getCompetenceValue } from './negociosIndicators';
 import { getNameInitial } from '../../utils';
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 
 interface NegocioDetalhesDrawerProps {
   negocio: NegocioDto | null;
+  negociosCliente: NegocioDto[];
+  mesCobrancaDaTela: string;
   etapas: EtapaDto[];
   isOpen: boolean;
   onClose: () => void;
@@ -24,13 +27,15 @@ const formatCurrency = (value: number) => {
 
 export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   negocio,
+  negociosCliente,
+  mesCobrancaDaTela,
   etapas,
   isOpen,
   onClose,
   onAtividadeRegistrada
 }) => {
   const { getWhatsAppLink } = useWhatsAppLink();
-  const [activeTab, setActiveTab] = useState<'geral' | 'atividades' | 'historico'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'negocios' | 'atividades' | 'historico'>('geral');
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
 
   const [atividades, setAtividades] = useState<any[]>([]);
@@ -163,7 +168,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
           </div>
 
           {/* Amount and Top Actions */}
-          <div className="flex items-baseline justify-between pt-1">
+          <div className="flex flex-wrap items-start justify-between gap-2 pt-1">
             <div>
               <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">
                 Valor do Débito Atual
@@ -173,7 +178,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               {negocio.telefonePrincipal && negocio.telefonePrincipal.trim() && (
                 <a
                   href={getWhatsAppLink(negocio.telefonePrincipal)}
@@ -183,6 +188,17 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                 >
                   <MessageCircle className="w-3.5 h-3.5 fill-white/20" />
                   <span>WhatsApp</span>
+                </a>
+              )}
+
+              {negocio.clientePublicId && (
+                <a
+                  href={getWebApoliceClienteUrl(negocio.clientePublicId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-slate-700 dark:text-indigo-400 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/50"
+                >
+                  Ver Cadastro <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                 </a>
               )}
 
@@ -200,7 +216,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
           </div>
 
           {/* Tab Navigation */}
-          <div className="grid grid-cols-3 border-b border-slate-100 dark:border-slate-800 -mb-6 mt-2 pt-2">
+          <div className="grid grid-cols-4 border-b border-slate-100 dark:border-slate-800 -mb-6 mt-2 pt-2">
             <button
               type="button"
               onClick={() => setActiveTab('geral')}
@@ -211,6 +227,18 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
               }`}
             >
               Visão geral
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('negocios')}
+              aria-pressed={activeTab === 'negocios'}
+              className={`flex min-w-0 items-center justify-center border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'negocios'
+                  ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              Negócios
             </button>
             <button
               type="button"
@@ -246,22 +274,19 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
         {/* Content */}
         {/* Drawer Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+
+          {activeTab === 'negocios' && (
+            <NegociosDoCliente key={`${negocio.publicId}|${mesCobrancaDaTela}`} negocioAtual={negocio}
+              negocios={negociosCliente} etapas={etapas} mesCobrancaDaTela={mesCobrancaDaTela} />
+          )}
           
           {activeTab === 'geral' && (
             <div className="flex flex-col gap-6">
             {/* Resumo Cadastral Grid */}
             <section className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Dados Operacionais
-                </span>
-                {negocio.clientePublicId && (
-                  <a href={getWebApoliceClienteUrl(negocio.clientePublicId)} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-slate-700 dark:text-indigo-400 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/50">
-                    Ver Cadastro <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                  </a>
-                )}
-              </div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Dados Operacionais
+              </span>
 
               <div className="grid grid-cols-2 gap-3 bg-slate-50/80 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800">
                 

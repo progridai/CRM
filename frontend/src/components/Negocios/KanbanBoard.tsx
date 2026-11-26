@@ -6,7 +6,6 @@ import { useQuickActivityTemplates } from '../../hooks/useQuickActivityTemplates
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 import { getNameInitial } from '../../utils';
 import type { NegociosSort } from '../../types';
-import { PaginacaoNegocios } from './PaginacaoNegocios';
 
 interface KanbanBoardProps {
   etapas: EtapaDto[];
@@ -24,8 +23,23 @@ const ALL_GROUP_DEALS = '__all_group_deals__';
 
 const formatCurrency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format;
 const compararNomes = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true }).compare;
+const calendarioCobranca = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric',
+});
 const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const CARDS_POR_PAGINA = 24;
+
+function resumirCompetenciasAntigas(grupo: NegocioDto[], primeiroMesRecente: number) {
+  const competencias = new Set<number>();
+  let maisAntiga = primeiroMesRecente;
+  for (const { competenciaMes, competenciaAno } of grupo) {
+    if (!competenciaAno || competenciaMes < 1 || competenciaMes > 12) continue;
+    const periodo = competenciaAno * 12 + competenciaMes - 1;
+    if (periodo >= primeiroMesRecente) continue;
+    competencias.add(periodo);
+    maisAntiga = Math.min(maisAntiga, periodo);
+  }
+  return { quantidade: competencias.size, maisAntiga };
+}
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCardClick, onDropCard, onOpenQuickActivitiesManager, onOpenWhatsApp, onAtividadeRegistrada, sortMode }) => {
   const { getWhatsAppLink } = useWhatsAppLink();
@@ -43,7 +57,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
   const activityPanelRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const [navigation, setNavigation] = useState({ previous: false, next: false });
-  const [paginas, setPaginas] = useState<Record<string, number>>({});
+
+  let primeiroMesRecente = 0;
+  if (sortMode === 'competencias-antigas-desc') {
+    const partes = calendarioCobranca.formatToParts(new Date());
+    const ano = Number(partes.find(parte => parte.type === 'year')?.value);
+    const mes = Number(partes.find(parte => parte.type === 'month')?.value);
+    primeiroMesRecente = ano * 12 + mes - 1 - 2;
+  }
 
   const colunas = useMemo(() => {
     const porEtapa = new Map<string, { clientes: Map<string, NegocioDto[]>; totalValor: number; quantidade: number }>();
@@ -61,19 +82,27 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
     const ordenarPorValor = sortMode === 'value-asc' || sortMode === 'value-desc';
     const direcao = sortMode === 'value-desc' || sortMode === 'name-desc' ? -1 : 1;
     return new Map([...porEtapa].map(([codigo, coluna]) => {
+      const ordenarPorCompetencias = sortMode === 'competencias-antigas-desc' &&
+        etapas.some(etapa => etapa.codigo === codigo && etapa.classificacao === 'aberta');
       const grupos = [...coluna.clientes].map(([cliente, grupo]) => ({
         chave: `${codigo}|${cliente}`,
-        grupo: ordenarPorValor ? grupo.sort((a, b) => direcao * (a.valor - b.valor)) : grupo,
+        grupo: grupo.sort((a, b) => a.competenciaAno - b.competenciaAno || a.competenciaMes - b.competenciaMes),
         totalGrupo: grupo.reduce((total, item) => total + item.valor, 0),
+        competenciasAntigas: ordenarPorCompetencias ? resumirCompetenciasAntigas(grupo, primeiroMesRecente) : null,
       }));
       grupos.sort((a, b) => {
         if (ordenarPorValor) return direcao * (a.totalGrupo - b.totalGrupo);
+        if (a.competenciasAntigas && b.competenciasAntigas) {
+          const porCompetencias = b.competenciasAntigas.quantidade - a.competenciasAntigas.quantidade ||
+            a.competenciasAntigas.maisAntiga - b.competenciasAntigas.maisAntiga;
+          if (porCompetencias) return porCompetencias;
+        }
         const porQuantidade = sortMode === 'parcelas-desc' ? b.grupo.length - a.grupo.length : 0;
         return porQuantidade || direcao * compararNomes(a.grupo[0].nomeCliente, b.grupo[0].nomeCliente);
       });
       return [codigo, { grupos, totalValor: coluna.totalValor, quantidade: coluna.quantidade }] as const;
     }));
-  }, [negocios, sortMode]);
+  }, [negocios, etapas, sortMode, primeiroMesRecente]);
 
   useEffect(() => {
     const board = boardRef.current;
@@ -275,9 +304,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
       <div className="-mx-2 flex min-h-[500px] items-stretch pb-4">
         {etapas.map((etapa) => {
           const { grupos, totalValor, quantidade } = colunas.get(etapa.codigo) ?? { grupos: [], totalValor: 0, quantidade: 0 };
-          const ultimaPagina = Math.max(0, Math.ceil(grupos.length / CARDS_POR_PAGINA) - 1);
-          const pagina = Math.min(paginas[etapa.codigo] ?? 0, ultimaPagina);
-          const inicio = pagina * CARDS_POR_PAGINA;
 
           // Fallback para cor_hex vazio
           const color = etapa.corHex || '#94a3b8';
@@ -318,12 +344,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                 </div>
               </div>
 
-              <PaginacaoNegocios pagina={pagina} porPagina={CARDS_POR_PAGINA} total={grupos.length}
-                unidade={`cards em ${etapa.nome}`} onChange={(novaPagina) => {
-                  setOpenGroup(null);
-                  setPaginas(atuais => ({ ...atuais, [etapa.codigo]: novaPagina }));
-                }} />
-
               {/* Área de Cards */}
               <div className="flex flex-col gap-2.5 min-h-[150px]">
                 {quantidade === 0 ? (
@@ -332,7 +352,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ etapas, negocios, onCa
                       Nenhum negócio
                     </span>
                   </div>
-                ) : grupos.slice(inicio, inicio + CARDS_POR_PAGINA).map(({ chave, grupo, totalGrupo }) => {
+                ) : grupos.map(({ chave, grupo, totalGrupo }) => {
                       const totalAtividades = grupo.reduce((acc, n) => acc + (n.atividadesCount || 0), 0);
                       const primeiro = grupo[0];
                       const idsGrupo = grupo.map(n => n.publicId).join(',');

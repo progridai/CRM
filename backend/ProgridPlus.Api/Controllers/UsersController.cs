@@ -67,7 +67,8 @@ public class UsersController : ControllerBase
             email        = acesso.Email,
             isActive     = acesso.Ativo,
             acessoTotal  = acesso.AcessoTotal,
-            permissoes   = acesso.TemPermissaoCrm ? new[] { "crm.acessar" } : Array.Empty<string>()
+            permissoes   = acesso.TemPermissaoCrm ? new[] { "crm.acessar" } : Array.Empty<string>(),
+            podeUsarAssertiva = acesso.PodeUsarAssertiva
         });
     }
 }

@@ -143,13 +143,14 @@ export const NegociosHeader: React.FC<NegociosHeaderProps> = ({
               aria-label="Ordenar negócios"
               value={sortMode}
               onChange={(event) => onSortModeChange(event.target.value as NegociosSort)}
-              className="max-w-32 cursor-pointer bg-transparent text-xs font-semibold text-slate-800 outline-none dark:text-slate-100"
+              className="max-w-44 cursor-pointer bg-transparent text-xs font-semibold text-slate-800 outline-none dark:text-slate-100"
             >
               <option value="name-asc">Nome A–Z</option>
               <option value="name-desc">Nome Z–A</option>
               <option value="value-desc">Maior valor</option>
               <option value="value-asc">Menor valor</option>
               {viewMode === 'kanban' && <option value="parcelas-desc">Mais parcelas</option>}
+              {viewMode === 'kanban' && <option value="competencias-antigas-desc">Prioridade</option>}
             </select>
           </label>
         </div>

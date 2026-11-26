@@ -122,6 +122,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Administrador", policy =>
         policy.RequireAuthenticatedUser()
               .AddRequirements(new CrmAcessoRequirement(exigirAcessoTotal: true)));
+
+    options.AddPolicy("Assertiva", policy =>
+        policy.RequireAuthenticatedUser()
+              .AddRequirements(new CrmAcessoRequirement(exigirAssertiva: true)));
 });
 
 var app = builder.Build();
