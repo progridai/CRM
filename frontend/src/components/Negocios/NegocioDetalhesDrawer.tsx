@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2, ChevronRight, UserRound, ExternalLink } from 'lucide-react';
 import { getWebApoliceClienteUrl } from '../../config/webApolice';
 import { listarImportacoesNegocio, type NegocioDto, type EtapaDto, type NegocioImportacaoDto } from '../../services/negociosService';
@@ -28,7 +28,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-type AbaFicha = 'geral' | 'negocios' | 'atividades' | 'historico' | 'assertiva';
+type AbaFicha = 'geral' | 'negocios' | 'atividades' | 'historico' | 'assertiva' | 'voip';
 
 function AbaPill({
   active,
@@ -84,9 +84,32 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   const exibirAssertiva = !!clienteId && user?.podeUsarAssertiva === true;
   const exibirDiscador = user?.podeUsarDiscadorVoip === true;
   const [aba, setActiveTab] = useState<AbaFicha>('geral');
-  const activeTab = aba === 'assertiva' && !exibirAssertiva ? 'geral' : aba;
+  const activeTab = (aba === 'assertiva' && !exibirAssertiva) || (aba === 'voip' && !exibirDiscador) ? 'geral' : aba;
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
-  const [discadorAberto, setDiscadorAberto] = useState(false);
+  const focarDiscador = useRef(false);
+  const corpoRef = useRef<HTMLDivElement>(null);
+
+  const posicionarDiscador = () => {
+    corpoRef.current?.scrollTo({ top: 0 });
+    document.getElementById('discador-voip')?.scrollIntoView({ block: 'nearest' });
+    const ramal = document.getElementById('discador-voip-ramal');
+    if (ramal instanceof HTMLInputElement) ramal.focus();
+  };
+
+  const abrirDiscador = () => {
+    if (activeTab === 'voip') {
+      posicionarDiscador();
+      return;
+    }
+    focarDiscador.current = true;
+    setActiveTab('voip');
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'voip' || !focarDiscador.current) return;
+    focarDiscador.current = false;
+    posicionarDiscador();
+  }, [activeTab]);
 
   const [atividades, setAtividades] = useState<any[]>([]);
   const [loadingAtividades, setLoadingAtividades] = useState(false);
@@ -251,8 +274,8 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                 {exibirDiscador && (
                   <button
                     type="button"
-                    aria-expanded={discadorAberto}
-                    onClick={() => setDiscadorAberto((aberto) => !aberto)}
+                    aria-controls="discador-voip"
+                    onClick={abrirDiscador}
                     className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#5A52FF] px-3 text-xs font-bold text-white shadow-xs transition-colors hover:bg-indigo-700"
                   >
                     <Phone className="h-3.5 w-3.5" aria-hidden="true" />
@@ -260,15 +283,6 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   </button>
                 )}
               </div>
-
-              {exibirDiscador && discadorAberto && (
-                <DiscadorVoipChamada
-                  key={negocio.publicId}
-                  negocio={negocio}
-                  usuarioId={user?.id}
-                  onFechar={() => setDiscadorAberto(false)}
-                />
-              )}
             </div>
           </div>
 
@@ -290,13 +304,20 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
             {exibirAssertiva && (
               <AbaPill active={activeTab === 'assertiva'} label="Assertiva" onClick={() => setActiveTab('assertiva')} />
             )}
+            {exibirDiscador && (
+              <AbaPill active={activeTab === 'voip'} label="Discador VoIP" onClick={() => setActiveTab('voip')} />
+            )}
           </div>
         </div>
 
         {/* Content */}
         {/* Drawer Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+        <div ref={corpoRef} className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
           {activeTab === 'assertiva' && clienteId && <AssertivaFicha key={clienteId} clienteId={clienteId} />}
+
+          {activeTab === 'voip' && (
+            <DiscadorVoipChamada key={negocio.publicId} negocio={negocio} usuarioId={user?.id} />
+          )}
 
           {activeTab === 'negocios' && (
             <NegociosDoCliente key={`${negocio.publicId}|${mesCobrancaDaTela}`} negocioAtual={negocio}
