@@ -78,13 +78,13 @@ export function DiscadorVoipChamada({
   }
 
   return (
-    <section id="discador-voip" aria-labelledby="discador-voip-titulo" className="space-y-3 rounded-xl border border-slate-200 p-4 text-sm dark:border-slate-800">
-      <div>
+    <section id="discador-voip" aria-labelledby="discador-voip-titulo" className="rounded-xl border border-slate-200 p-4 text-sm dark:border-slate-800">
+      <div className="mb-4">
         <h3 id="discador-voip-titulo" className="font-semibold text-slate-900 dark:text-slate-100">Discador VoIP</h3>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A ligação sai pelo seu ramal na Sisnetsul.</p>
       </div>
 
-      <div className="grid gap-3">
+      <div className="grid gap-4">
         <label className="block">
           <span className="mb-1 block text-[11px] font-semibold text-slate-500">Seu ramal</span>
           <input
@@ -126,14 +126,14 @@ export function DiscadorVoipChamada({
         </label>
       </div>
 
-      {erro && <p role="alert" className="mt-3 text-xs font-semibold text-rose-700 dark:text-rose-300">{erro}</p>}
-      {mensagem && <p role="status" className="mt-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300">{mensagem}</p>}
+      {erro && <p role="alert" className="mt-4 text-xs font-semibold text-rose-700 dark:text-rose-300">{erro}</p>}
+      {mensagem && <p role="status" className="mt-4 text-xs font-semibold text-emerald-700 dark:text-emerald-300">{mensagem}</p>}
 
       <button
         type="button"
         onClick={() => void ligar()}
         disabled={ocupado}
-        className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#5A52FF] text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-60"
+        className="mt-4 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#5A52FF] text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-60"
       >
         {ocupado ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Phone className="h-3.5 w-3.5" />}
         {ocupado ? 'Ligando…' : 'Ligar agora'}

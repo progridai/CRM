@@ -216,7 +216,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
         className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[460px] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300"
       >
         {/* Drawer Header */}
-        <div className="flex flex-col gap-4 border-b border-slate-100 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-4 bg-white p-6 dark:bg-slate-900">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
@@ -285,6 +285,8 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
               </div>
             </div>
           </div>
+
+          <div className="w-full border-t border-slate-200 dark:border-slate-700" aria-hidden="true" />
 
           <div role="tablist" aria-label="Seções da ficha do cliente" className="flex flex-wrap gap-2">
             <AbaPill active={activeTab === 'geral'} label="Visão geral" onClick={() => setActiveTab('geral')} />
