@@ -193,15 +193,18 @@ export const NegociosPage: React.FC = () => {
       />
 
       {/* Drawer de Detalhes */}
-      <NegocioDetalhesDrawer
-        isOpen={!!selectedNegocio}
-        negocio={selectedNegocio}
-        negociosCliente={negociosCliente}
-        mesCobrancaDaTela={filtrosAplicados.mesCobranca}
-        etapas={etapas}
-        onClose={() => setSelectedNegocio(null)}
-        onAtividadeRegistrada={carregarDados}
-      />
+      {selectedNegocio && (
+        <NegocioDetalhesDrawer
+          key={selectedNegocio.publicId}
+          isOpen
+          negocio={selectedNegocio}
+          negociosCliente={negociosCliente}
+          mesCobrancaDaTela={filtrosAplicados.mesCobranca}
+          etapas={etapas}
+          onClose={() => setSelectedNegocio(null)}
+          onAtividadeRegistrada={carregarDados}
+        />
+      )}
 
       <QuickActivitiesDrawer 
         isOpen={quickActivitiesOpen} 

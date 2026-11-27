@@ -5,7 +5,7 @@ import { listarImportacoesNegocio, type NegocioDto, type EtapaDto, type NegocioI
 import { DealHistoryTimeline } from './DealHistoryTimeline';
 import { NegociosDoCliente } from './NegociosDoCliente';
 import { formatarPeriodo, getCompetenceValue } from './negociosIndicators';
-import { getNameInitial } from '../../utils';
+import { formatCurrency, getNameInitial } from '../../utils';
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 import { useAuth } from '../../auth/AuthProvider';
 import { AssertivaFicha } from '../Assertiva/AssertivaFicha';
@@ -20,13 +20,6 @@ interface NegocioDetalhesDrawerProps {
   onClose: () => void;
   onAtividadeRegistrada?: () => void;
 }
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-};
 
 type AbaFicha = 'geral' | 'negocios' | 'atividades' | 'historico' | 'assertiva' | 'voip';
 
@@ -86,8 +79,14 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   const [aba, setActiveTab] = useState<AbaFicha>('geral');
   const activeTab = (aba === 'assertiva' && !exibirAssertiva) || (aba === 'voip' && !exibirDiscador) ? 'geral' : aba;
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
+  const [mesEscolhido, setMesEscolhido] = useState<{ contexto: string; mes: string }>();
   const focarDiscador = useRef(false);
   const corpoRef = useRef<HTMLDivElement>(null);
+
+  const fecharPainel = () => {
+    setMesEscolhido(undefined);
+    onClose();
+  };
 
   const posicionarDiscador = () => {
     corpoRef.current?.scrollTo({ top: 0 });
@@ -200,15 +199,26 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
 
   if (!isOpen || !negocio) return null;
 
-  const etapaAtual = etapas.find((etapa) => etapa.codigo === negocio.etapaCodigo);
+  const etapasPorCodigo = new Map(etapas.map(etapa => [etapa.codigo, etapa]));
+  const etapaAtual = etapasPorCodigo.get(negocio.etapaCodigo);
   const nomeOperador = negocio.nomeOperador?.trim() || 'Sem responsável';
+  const meses = [...negocio.mesesCobranca].sort().reverse();
+  const contextoMes = `${negocio.publicId}|${mesCobrancaDaTela}`;
+  const mesPadrao = meses.includes(mesCobrancaDaTela) ? mesCobrancaDaTela : meses[0];
+  const mes = mesEscolhido?.contexto === contextoMes && meses.includes(mesEscolhido.mes)
+    ? mesEscolhido.mes : mesPadrao;
+  const negociosDoPeriodo = mes
+    ? negociosCliente.filter(item => item.mesesCobranca.includes(mes))
+    : negociosCliente;
+  const abertos = negociosDoPeriodo.filter(item => etapasPorCodigo.get(item.etapaCodigo)?.classificacao === 'aberta');
+  const totalEmAberto = abertos.reduce((total, item) => total + item.valor, 0);
 
   return (
     <>
       {/* Backdrop */}
       <div 
         className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
-        onClick={onClose}
+        onClick={fecharPainel}
       />
       
       {/* Drawer */}
@@ -228,7 +238,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={fecharPainel}
               className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               <X className="h-5 w-5" />
@@ -236,13 +246,25 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
           </div>
 
           <div className="flex flex-col items-start gap-3">
-            <div>
-              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">
-                Valor do Débito Atual
-              </span>
-              <span className="font-display text-3xl font-bold tracking-tight text-[#5A52FF] dark:text-indigo-400">
-                {formatCurrency(negocio.valor)}
-              </span>
+            <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
+              <div>
+                <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  Valor deste negócio
+                </span>
+                <span className="font-display text-3xl font-bold tracking-tight text-[#5A52FF] dark:text-indigo-400">
+                  {formatCurrency(negocio.valor)}
+                </span>
+              </div>
+              {negociosDoPeriodo.length > 1 && (
+                <div>
+                  <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+                    Total em aberto do cliente{mes && ` · ${formatarPeriodo(mes)}`}
+                  </span>
+                  <span className="font-display text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
+                    {formatCurrency(totalEmAberto)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex w-full flex-col items-start gap-2">
@@ -322,8 +344,15 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
           )}
 
           {activeTab === 'negocios' && (
-            <NegociosDoCliente key={`${negocio.publicId}|${mesCobrancaDaTela}`} negocioAtual={negocio}
-              negocios={negociosCliente} etapas={etapas} mesCobrancaDaTela={mesCobrancaDaTela} />
+            <NegociosDoCliente
+              meses={meses}
+              mes={mes}
+              onMesChange={periodo => setMesEscolhido({ contexto: contextoMes, mes: periodo })}
+              negocios={negociosDoPeriodo}
+              etapasPorCodigo={etapasPorCodigo}
+              quantidadeEmAberto={abertos.length}
+              totalEmAberto={totalEmAberto}
+            />
           )}
           
           {activeTab === 'geral' && (
@@ -725,7 +754,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
         {/* Footer */}
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
            <button 
-             onClick={onClose}
+             onClick={fecharPainel}
              className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
            >
              Fechar Detalhes

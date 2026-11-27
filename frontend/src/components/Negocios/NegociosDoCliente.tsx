@@ -1,32 +1,28 @@
-import { useState } from 'react';
 import type { EtapaDto, NegocioDto } from '../../services/negociosService';
 import { formatCurrency } from '../../utils';
 import { formatarPeriodo, getCompetenceValue } from './negociosIndicators';
 
 interface NegociosDoClienteProps {
-  negocioAtual: NegocioDto;
+  meses: string[];
+  mes: string | undefined;
+  onMesChange: (mes: string) => void;
   negocios: NegocioDto[];
-  etapas: EtapaDto[];
-  mesCobrancaDaTela: string;
+  etapasPorCodigo: ReadonlyMap<string, EtapaDto>;
+  quantidadeEmAberto: number;
+  totalEmAberto: number;
 }
 
-export function NegociosDoCliente({ negocioAtual, negocios, etapas, mesCobrancaDaTela }: NegociosDoClienteProps) {
-  const [mesEscolhido, setMesEscolhido] = useState('');
-  const meses = [...negocioAtual.mesesCobranca].sort().reverse();
-  const mesPadrao = meses.includes(mesCobrancaDaTela) ? mesCobrancaDaTela : meses[0];
-  const mes = meses.includes(mesEscolhido) ? mesEscolhido : mesPadrao;
-
+export function NegociosDoCliente({
+  meses, mes, onMesChange, negocios, etapasPorCodigo, quantidadeEmAberto, totalEmAberto,
+}: NegociosDoClienteProps) {
   if (!mes) {
     return <p className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
       Este negócio ainda não tem mês de cobrança vinculado.
     </p>;
   }
 
-  const etapasPorCodigo = new Map(etapas.map(etapa => [etapa.codigo, etapa]));
-  const negociosDoMes = negocios.filter(negocio => negocio.mesesCobranca.includes(mes)).sort((a, b) =>
+  const negociosDoMes = [...negocios].sort((a, b) =>
     a.competenciaAno - b.competenciaAno || a.competenciaMes - b.competenciaMes);
-  const abertos = negociosDoMes.filter(negocio => etapasPorCodigo.get(negocio.etapaCodigo)?.classificacao === 'aberta');
-  const totalEmAberto = abertos.reduce((total, negocio) => total + negocio.valor, 0);
 
   return (
     <section className="space-y-3">
@@ -35,7 +31,7 @@ export function NegociosDoCliente({ negocioAtual, negocios, etapas, mesCobrancaD
         {meses.length > 1 ? (
           <label className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
             Mês de cobrança
-            <select value={mes} onChange={event => setMesEscolhido(event.target.value)}
+            <select value={mes} onChange={event => onMesChange(event.target.value)}
               className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
               {meses.map(periodo => <option key={periodo} value={periodo}>{formatarPeriodo(periodo)}</option>)}
             </select>
@@ -91,7 +87,7 @@ export function NegociosDoCliente({ negocioAtual, negocios, etapas, mesCobrancaD
         <div>
           <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Total em aberto</p>
           <p className="text-[11px] text-indigo-700 dark:text-indigo-300">
-            {abertos.length} de {negociosDoMes.length} {negociosDoMes.length === 1 ? 'negócio' : 'negócios'}
+            {quantidadeEmAberto} de {negociosDoMes.length} {negociosDoMes.length === 1 ? 'negócio' : 'negócios'}
           </p>
         </div>
         <strong className="text-base tabular-nums text-indigo-900 dark:text-indigo-200">{formatCurrency(totalEmAberto)}</strong>
