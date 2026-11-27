@@ -8,10 +8,14 @@ namespace ProgridPlus.Api.Auth;
 /// Marker que representa o requisito de acesso ao CRM.
 /// Registrado como policy "CrmAcesso".
 /// </summary>
-public sealed class CrmAcessoRequirement(bool exigirAcessoTotal = false, bool exigirAssertiva = false) : IAuthorizationRequirement
+public sealed class CrmAcessoRequirement(
+    bool exigirAcessoTotal = false,
+    bool exigirAssertiva = false,
+    bool exigirDiscadorVoip = false) : IAuthorizationRequirement
 {
     public bool ExigirAcessoTotal { get; } = exigirAcessoTotal;
     public bool ExigirAssertiva { get; } = exigirAssertiva;
+    public bool ExigirDiscadorVoip { get; } = exigirDiscadorVoip;
 }
 
 /// <summary>
@@ -99,6 +103,13 @@ public sealed class CrmAcessoHandler(
         if (requirement.ExigirAssertiva && !acesso.PodeUsarAssertiva)
         {
             logger.LogWarning("CrmAcessoHandler: acesso à Assertiva negado para o usuário {UsuarioId}.", acesso.UsuarioId);
+            context.Fail();
+            return;
+        }
+
+        if (requirement.ExigirDiscadorVoip && !acesso.PodeUsarDiscadorVoip)
+        {
+            logger.LogWarning("CrmAcessoHandler: acesso ao Discador VoIP negado para o usuário {UsuarioId}.", acesso.UsuarioId);
             context.Fail();
             return;
         }

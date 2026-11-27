@@ -9,6 +9,7 @@ using ProgridPlus.Api.Contatos;
 using ProgridPlus.Api.Data;
 using ProgridPlus.Api.Importacoes;
 using ProgridPlus.Api.Seguranca;
+using ProgridPlus.Api.Voip;
 using ProgridPlus.Api.WhatsApp;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -68,6 +69,12 @@ builder.Services.AddScoped<ImportacaoOperacoesServico>();
 // Integração WhatsApp/Sisnetsul. A chave é lida somente da configuração do processo.
 builder.Services.AddHttpClient<SisnetsulWhatsAppClient>();
 builder.Services.AddScoped<WhatsAppServico>();
+builder.Services.AddSingleton<VoipSegredo>();
+builder.Services.AddSingleton<VoipClient>();
+builder.Services.AddScoped<VoipServico>();
+builder.Services.AddHttpClient(VoipClient.NomeHttpClient, client => client.Timeout = TimeSpan.FromSeconds(20))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+    .RemoveAllLoggers();
 builder.Services.AddSingleton<AssertivaSegredo>();
 builder.Services.AddSingleton<AssertivaClient>();
 builder.Services.AddScoped<AssertivaServico>();
@@ -139,6 +146,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Assertiva", policy =>
         policy.RequireAuthenticatedUser()
               .AddRequirements(new CrmAcessoRequirement(exigirAssertiva: true)));
+
+    options.AddPolicy("DiscadorVoip", policy =>
+        policy.RequireAuthenticatedUser()
+              .AddRequirements(new CrmAcessoRequirement(exigirDiscadorVoip: true)));
 });
 
 var app = builder.Build();

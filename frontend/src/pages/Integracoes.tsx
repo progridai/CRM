@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, KeyRound, Loader2, MessageCircle, PlugZap, Save, Server } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { AssertivaConfiguracaoForm } from '../components/Assertiva/AssertivaConfiguracaoForm';
+import { VoipConfiguracaoForm } from '../components/Voip/VoipConfiguracaoForm';
 import {
   atualizarConfiguracaoWhatsApp,
   obterConfiguracaoWhatsApp,
@@ -14,9 +15,12 @@ const getErrorMessage = (error: any) =>
 
 export const IntegracoesPage: React.FC = () => {
   const { user } = useAuth();
-  const [aba, setAba] = useState<'whatsapp' | 'assertiva'>('whatsapp');
+  const [aba, setAba] = useState<'whatsapp' | 'assertiva' | 'voip'>('whatsapp');
   const exibirAssertiva = user?.isAdmin && user.podeUsarAssertiva;
-  const assertivaAtiva = aba === 'assertiva' && exibirAssertiva;
+  const exibirVoip = user?.isAdmin && user.podeUsarDiscadorVoip;
+  const abaAtiva = aba === 'assertiva' && exibirAssertiva ? 'assertiva'
+    : aba === 'voip' && exibirVoip ? 'voip'
+    : 'whatsapp';
   const botoes = 'border-b-2 px-3 py-2 text-sm font-semibold';
   const ativo = 'border-indigo-500 text-indigo-700 dark:text-indigo-300';
   const inativo = 'border-transparent text-slate-500 dark:text-slate-400';
@@ -31,13 +35,16 @@ export const IntegracoesPage: React.FC = () => {
         </div>
       </div>
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800" aria-label="Integrações">
-        <button type="button" aria-pressed={!assertivaAtiva} onClick={() => setAba('whatsapp')}
-          className={`${botoes} ${!assertivaAtiva ? ativo : inativo}`}>WhatsApp</button>
-        {exibirAssertiva && <button type="button" aria-pressed={aba === 'assertiva'} onClick={() => setAba('assertiva')}
-          className={`${botoes} ${aba === 'assertiva' ? ativo : inativo}`}>Assertiva</button>}
+        <button type="button" aria-pressed={abaAtiva === 'whatsapp'} onClick={() => setAba('whatsapp')}
+          className={`${botoes} ${abaAtiva === 'whatsapp' ? ativo : inativo}`}>WhatsApp</button>
+        {exibirAssertiva && <button type="button" aria-pressed={abaAtiva === 'assertiva'} onClick={() => setAba('assertiva')}
+          className={`${botoes} ${abaAtiva === 'assertiva' ? ativo : inativo}`}>Assertiva</button>}
+        {exibirVoip && <button type="button" aria-pressed={abaAtiva === 'voip'} onClick={() => setAba('voip')}
+          className={`${botoes} ${abaAtiva === 'voip' ? ativo : inativo}`}>Discador VoIP</button>}
       </div>
-      <div hidden={assertivaAtiva}><WhatsAppConfiguracaoForm /></div>
-      {assertivaAtiva && <AssertivaConfiguracaoForm />}
+      <div hidden={abaAtiva !== 'whatsapp'}><WhatsAppConfiguracaoForm /></div>
+      {abaAtiva === 'assertiva' && <AssertivaConfiguracaoForm />}
+      {abaAtiva === 'voip' && <VoipConfiguracaoForm />}
     </div>
   );
 };

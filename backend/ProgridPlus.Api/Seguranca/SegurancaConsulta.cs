@@ -18,6 +18,7 @@ public sealed class SegurancaConsulta
     }
 
     private const string PermissaoAssertiva = "crm.assertiva.utilizar";
+    private const string PermissaoDiscador = "crm.discador_voip.utilizar";
 
     private const string QueryAcessoCrm = """
         SELECT
@@ -67,7 +68,19 @@ public sealed class SegurancaConsulta
                 WHERE up.usuario_id = u.id
                   AND p.ativo = true
                   AND pp.permissao_id = assertiva.id
-            ) AS TemPermissaoAssertiva
+            ) AS TemPermissaoAssertiva,
+
+            discador.id IS NOT NULL AS DiscadorDisponivel,
+
+            EXISTS (
+                SELECT 1
+                FROM seguranca.usuario_perfil up
+                JOIN seguranca.perfil p ON p.id = up.perfil_id
+                JOIN seguranca.perfil_permissao pp ON pp.perfil_id = p.id
+                WHERE up.usuario_id = u.id
+                  AND p.ativo = true
+                  AND pp.permissao_id = discador.id
+            ) AS TemPermissaoDiscador
 
         FROM seguranca.usuario u
         LEFT JOIN (
@@ -82,6 +95,18 @@ public sealed class SegurancaConsulta
               AND m.codigo = 'CRM'
               AND m.ativo = true AND m.habilitado = true
         ) assertiva ON true
+        LEFT JOIN (
+            SELECT pm.id
+            FROM seguranca.permissao pm
+            JOIN seguranca.recurso r ON r.id = pm.recurso_id
+            JOIN seguranca.modulo m ON m.id = r.modulo_id
+            WHERE pm.codigo = @permissaoDiscador
+              AND pm.ativo = true
+              AND r.codigo = 'DISCADOR_VOIP'
+              AND r.ativo = true AND r.habilitado = true
+              AND m.codigo = 'CRM'
+              AND m.ativo = true AND m.habilitado = true
+        ) discador ON true
         WHERE u.keycloak_sub = @sub;
         """;
 
@@ -159,7 +184,7 @@ public sealed class SegurancaConsulta
         // CommandDefinition permite passar o CancellationToken ao Dapper
         var cmd = new CommandDefinition(
             QueryAcessoCrm,
-            parameters: new { sub, permissaoAssertiva = PermissaoAssertiva },
+            parameters: new { sub, permissaoAssertiva = PermissaoAssertiva, permissaoDiscador = PermissaoDiscador },
             cancellationToken: ct);
 
         var row = await conn.QuerySingleOrDefaultAsync<UsuarioAcessoRow>(cmd);
@@ -176,7 +201,9 @@ public sealed class SegurancaConsulta
             row.AcessoTotal,
             row.TemPermissaoCrm,
             row.AssertivaDisponivel,
-            row.TemPermissaoAssertiva);
+            row.TemPermissaoAssertiva,
+            row.DiscadorDisponivel,
+            row.TemPermissaoDiscador);
     }
 
     // Classe interna para o mapeamento do Dapper (nomes case-insensitive)
@@ -191,5 +218,7 @@ public sealed class SegurancaConsulta
         public bool TemPermissaoCrm { get; init; }
         public bool AssertivaDisponivel { get; init; }
         public bool TemPermissaoAssertiva { get; init; }
+        public bool DiscadorDisponivel { get; init; }
+        public bool TemPermissaoDiscador { get; init; }
     }
 }
