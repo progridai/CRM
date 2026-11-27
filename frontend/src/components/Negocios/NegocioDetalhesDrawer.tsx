@@ -27,6 +27,47 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+type AbaFicha = 'geral' | 'negocios' | 'atividades' | 'historico' | 'assertiva';
+
+function AbaPill({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5A52FF]/40 ${
+        active
+          ? 'border-[#5A52FF] bg-[#5A52FF] text-white shadow-sm dark:border-indigo-400 dark:bg-indigo-500'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+      }`}
+    >
+      <span>{label}</span>
+      {count !== undefined && (
+        <span
+          className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ${
+            active
+              ? 'bg-white/25 text-white'
+              : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   negocio,
   negociosCliente,
@@ -40,7 +81,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   const { user } = useAuth();
   const clienteId = negocio?.clientePublicId;
   const exibirAssertiva = !!clienteId && user?.podeUsarAssertiva === true;
-  const [aba, setActiveTab] = useState<'geral' | 'negocios' | 'atividades' | 'historico' | 'assertiva'>('geral');
+  const [aba, setActiveTab] = useState<AbaFicha>('geral');
   const activeTab = aba === 'assertiva' && !exibirAssertiva ? 'geral' : aba;
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
 
@@ -146,141 +187,93 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
       
       {/* Drawer */}
       <div 
-        className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[460px] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300"
       >
         {/* Drawer Header */}
-        <div className="p-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-3">
-          <div className="flex items-start justify-between">
-            <div className="flex flex-col gap-1 pr-4">
-              <div className="flex items-center gap-2">
-                <span
-                  className="px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-200"
-                >
-                  {etapaAtual?.nome || 'Etapa desconhecida'}
-                </span>
-              </div>
-              <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight mt-1">
-                {negocio.nomeCliente}
+        <div className="flex flex-col gap-4 border-b border-slate-100 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                {etapaAtual?.nome || 'Etapa desconhecida'}
+              </span>
+              <h2 className="mt-1.5 font-display text-xl font-bold leading-snug tracking-tight text-slate-900 dark:text-slate-100">
+                <span className="break-words">{negocio.nomeCliente}</span>
+                {negocio.clientePublicId && (
+                  <a
+                    href={getWebApoliceClienteUrl(negocio.clientePublicId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-indigo-200/80 bg-indigo-50/80 px-2 py-0.5 align-middle text-[11px] font-semibold tracking-normal text-[#5A52FF] transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-700/70 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/70"
+                  >
+                    Ver Cadastro
+                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </a>
+                )}
               </h2>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={onClose}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          {/* Amount and Top Actions */}
-          <div className="flex flex-wrap items-start justify-between gap-2 pt-1">
+          <div className="flex flex-col items-start gap-3">
             <div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">
+              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">
                 Valor do Débito Atual
               </span>
-              <span className="font-display font-bold text-3xl text-[#5A52FF] dark:text-indigo-400 tracking-tight">
+              <span className="font-display text-3xl font-bold tracking-tight text-[#5A52FF] dark:text-indigo-400">
                 {formatCurrency(negocio.valor)}
               </span>
             </div>
 
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-start gap-2">
               {negocio.telefonePrincipal && negocio.telefonePrincipal.trim() && (
                 <a
                   href={getWhatsAppLink(negocio.telefonePrincipal)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold shadow-xs transition-all"
+                  className="flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-[#20bd5a]"
                 >
-                  <MessageCircle className="w-3.5 h-3.5 fill-white/20" />
+                  <MessageCircle className="h-3.5 w-3.5 fill-white/20" />
                   <span>WhatsApp</span>
                 </a>
               )}
 
-              {negocio.clientePublicId && (
-                <a
-                  href={getWebApoliceClienteUrl(negocio.clientePublicId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:border-indigo-300 hover:bg-indigo-50/60 dark:border-slate-700 dark:text-indigo-400 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/50"
-                >
-                  Ver Cadastro <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </a>
-              )}
-
               <button
+                type="button"
                 onClick={() => {
                   setActiveTab('atividades');
                   setShowAddActivityForm(true);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#5A52FF] hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#5A52FF] px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-indigo-700"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="h-3.5 w-3.5" />
                 <span>Atividade</span>
               </button>
             </div>
           </div>
 
-          {/* Tab Navigation */}
-          <div className={`grid ${exibirAssertiva ? 'grid-cols-5 sm:grid-cols-[1fr_1fr_1.2fr_1.2fr_1fr] [&>button]:px-1' : 'grid-cols-4'} border-b border-slate-100 dark:border-slate-800 -mb-6 mt-2 pt-2`}>
-            <button
-              type="button"
-              onClick={() => setActiveTab('geral')}
-              className={`flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                activeTab === 'geral'
-                  ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-              }`}
-            >
-              Visão geral
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('negocios')}
-              aria-pressed={activeTab === 'negocios'}
-              className={`flex min-w-0 items-center justify-center border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                activeTab === 'negocios'
-                  ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-              }`}
-            >
-              Negócios
-            </button>
-            <button
-              type="button"
+          <div role="tablist" aria-label="Seções da ficha do cliente" className="flex flex-wrap gap-2">
+            <AbaPill active={activeTab === 'geral'} label="Visão geral" onClick={() => setActiveTab('geral')} />
+            <AbaPill active={activeTab === 'negocios'} label="Negócios" onClick={() => setActiveTab('negocios')} />
+            <AbaPill
+              active={activeTab === 'atividades'}
+              label="Atividades"
+              count={negocio.atividadesCount || 0}
               onClick={() => setActiveTab('atividades')}
-              className={`flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                activeTab === 'atividades'
-                  ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-              }`}
-            >
-              <span>Atividades</span>
-              <span className={`${exibirAssertiva ? 'hidden sm:inline' : ''} min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300`}>
-                {negocio.atividadesCount || 0}
-              </span>
-            </button>
-            <button
-              type="button"
+            />
+            <AbaPill
+              active={activeTab === 'historico'}
+              label="Histórico"
+              count={historico.length}
               onClick={() => setActiveTab('historico')}
-              className={`flex min-w-0 items-center justify-center gap-1.5 border-b-2 px-2 pb-2.5 text-xs font-semibold transition-colors cursor-pointer ${
-                activeTab === 'historico'
-                  ? 'border-[#5A52FF] text-[#5A52FF] dark:border-indigo-400 dark:text-indigo-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-              }`}
-            >
-              <span>Histórico</span>
-              <span className={`${exibirAssertiva ? 'hidden sm:inline' : ''} min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300`}>
-                {historico.length}
-              </span>
-            </button>
+            />
             {exibirAssertiva && (
-              <button type="button" aria-pressed={activeTab === 'assertiva'} onClick={() => setActiveTab('assertiva')}
-                className={`border-b-2 px-1 pb-2.5 text-xs font-semibold transition-colors ${activeTab === 'assertiva'
-                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-                Assertiva
-              </button>
+              <AbaPill active={activeTab === 'assertiva'} label="Assertiva" onClick={() => setActiveTab('assertiva')} />
             )}
           </div>
         </div>
