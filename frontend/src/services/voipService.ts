@@ -1,7 +1,7 @@
 import { isAxiosError } from 'axios';
 import { api } from './api';
 
-export const URL_VOIP_PADRAO = 'https://bravida.sisnetsul.com.br/api/click2call';
+export const URL_VOIP_PADRAO = 'https://bravida.sisnetsul.com.br/api/click2call/';
 
 export interface VoipConfiguracao {
   urlApi: string;
@@ -84,6 +84,7 @@ function montarLogTecnico(error: unknown, contexto?: VoipErroContexto): string {
 
   if (!error.response) {
     linhas.push('API CRM: sem resposta (rede/CORS)');
+    linhas.push(`URL chamada: ${requisicaoChamada(error.config)}`);
     linhas.push(`Código do cliente: ${texto(error.code)}`);
     linhas.push(`Mensagem do cliente: ${texto(error.message)}`);
     return linhas.join('\n');
@@ -153,6 +154,22 @@ function trechoBruto(data: unknown): string {
     }
   }
   return truncar(String(data), LIMITE_BRUTO);
+}
+
+function requisicaoChamada(config?: { baseURL?: string; url?: string; method?: string }): string {
+  const metodo = typeof config?.method === 'string' ? config.method.trim().toUpperCase() : '';
+  const url = juntarUrlAxios(config?.baseURL, config?.url);
+  if (metodo && url) return `${metodo} ${url}`;
+  return metodo || url || '—';
+}
+
+function juntarUrlAxios(baseURL?: string, url?: string): string {
+  const base = typeof baseURL === 'string' ? baseURL.trim() : '';
+  const caminho = typeof url === 'string' ? url.trim() : '';
+  if (!caminho) return base;
+  if (/^[a-z][a-z\d+.-]*:/i.test(caminho)) return caminho;
+  if (!base) return caminho;
+  return `${base.replace(/\/+$/, '')}/${caminho.replace(/^\/+/, '')}`;
 }
 
 function descreverLocal(error: unknown): string {

@@ -6,7 +6,7 @@ namespace ProgridPlus.Api.Voip;
 
 public sealed class VoipServico(IConfiguration configuration, VoipSegredo segredo, VoipClient client)
 {
-    public const string UrlPadrao = "https://bravida.sisnetsul.com.br/api/click2call";
+    public const string UrlPadrao = "https://bravida.sisnetsul.com.br/api/click2call/";
     private static readonly Regex Digitos = new(@"\D", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private NpgsqlConnection Conectar() => new(configuration.GetConnectionString("DefaultConnection"));
@@ -117,7 +117,7 @@ public sealed class VoipServico(IConfiguration configuration, VoipSegredo segred
             || string.IsNullOrEmpty(uri.Host)
             || !string.IsNullOrEmpty(uri.UserInfo))
             throw new VoipFalha(400, "url_invalida", "Informe uma URL https:// válida para a API do Discador VoIP.");
-        return uri.GetComponents(UriComponents.AbsoluteUri, UriFormat.SafeUnescaped);
+        return VoipClient.GarantirBarraFinal(uri);
     }
 
     private static Task<VoipConfiguracao?> LerAsync(NpgsqlConnection db, CancellationToken ct) =>

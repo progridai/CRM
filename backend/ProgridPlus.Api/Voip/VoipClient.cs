@@ -11,6 +11,7 @@ public sealed class VoipClient(IHttpClientFactory factory, ILogger<VoipClient> l
 
     public async Task DispararAsync(string url, string token, string ramal, string destino, CancellationToken ct)
     {
+        url = GarantirBarraFinal(url);
         using var client = factory.CreateClient(NomeHttpClient);
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         if (!request.Headers.TryAddWithoutValidation("X-Api-Token", token))
@@ -135,6 +136,23 @@ public sealed class VoipClient(IHttpClientFactory factory, ILogger<VoipClient> l
                 $"Falha ao ler o corpo da resposta: {ex.GetType().Name}: {ex.Message}",
                 token);
         }
+    }
+
+    internal static string GarantirBarraFinal(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return url;
+        return GarantirBarraFinal(uri);
+    }
+
+    internal static string GarantirBarraFinal(Uri uri)
+    {
+        var builder = new UriBuilder(uri);
+        if (builder.Path.EndsWith('/'))
+            return uri.GetComponents(UriComponents.AbsoluteUri, UriFormat.SafeUnescaped);
+
+        builder.Path += "/";
+        return builder.Uri.GetComponents(UriComponents.AbsoluteUri, UriFormat.SafeUnescaped);
     }
 
     private static string Mensagem(HttpStatusCode status) => status switch
