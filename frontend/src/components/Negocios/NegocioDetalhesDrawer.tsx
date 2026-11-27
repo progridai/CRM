@@ -361,12 +361,6 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   </span>
                 </div>
 
-                <label className="col-span-2 flex flex-col text-[11px] text-slate-500 dark:text-slate-400">
-                  ID Negócio CRM
-                  <input readOnly value={negocio.publicId} onFocus={(event) => event.currentTarget.select()}
-                    className="mt-0.5 w-full rounded border border-slate-200 bg-transparent px-2 py-1 font-mono text-xs dark:border-slate-700 dark:text-slate-200" />
-                </label>
-
                 {/* Data de Vencimento */}
                 <div className="flex flex-col">
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Data de Vencimento</span>
