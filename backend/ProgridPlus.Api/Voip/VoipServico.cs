@@ -69,17 +69,37 @@ public sealed class VoipServico(IConfiguration configuration, VoipSegredo segred
         {
             throw;
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            throw new VoipFalha(504, "tempo_esgotado", "A Sisnetsul não respondeu a tempo. Tente novamente.");
+            throw new VoipFalha(
+                504,
+                "tempo_esgotado",
+                "A Sisnetsul não respondeu a tempo. Tente novamente.",
+                DetalheTransporte(atual.UrlApi, ramal, destino, ex, token));
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            throw new VoipFalha(502, "provedor_indisponivel", "Não foi possível conectar à API do Discador VoIP.");
+            throw new VoipFalha(
+                502,
+                "provedor_indisponivel",
+                "Não foi possível conectar à API do Discador VoIP.",
+                DetalheTransporte(atual.UrlApi, ramal, destino, ex, token));
         }
 
         return new LigarVoipResposta($"Chamada iniciada! Atenda no ramal {ramal}.");
     }
+
+    private static VoipErroDetalhe DetalheTransporte(string endpoint, string ramal, string destino, Exception ex, string token) =>
+        new(
+            DateTime.UtcNow,
+            VoipTextoSeguro.Limpar(endpoint, token, 500),
+            ramal,
+            destino,
+            null,
+            null,
+            null,
+            ex.GetType().Name,
+            VoipTextoSeguro.Cadeia(ex, token));
 
     private static VoipConfiguracaoDto Projetar(VoipConfiguracao? atual) => new(
         atual?.UrlApi ?? UrlPadrao,
