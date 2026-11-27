@@ -196,19 +196,8 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
               <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
                 {etapaAtual?.nome || 'Etapa desconhecida'}
               </span>
-              <h2 className="mt-1.5 font-display text-xl font-bold leading-snug tracking-tight text-slate-900 dark:text-slate-100">
-                <span className="break-words">{negocio.nomeCliente}</span>
-                {negocio.clientePublicId && (
-                  <a
-                    href={getWebApoliceClienteUrl(negocio.clientePublicId)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-indigo-200/80 bg-indigo-50/80 px-2 py-0.5 align-middle text-[11px] font-semibold tracking-normal text-[#5A52FF] transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:border-indigo-700/70 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/70"
-                  >
-                    Ver Cadastro
-                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                  </a>
-                )}
+              <h2 className="mt-1.5 break-words font-display text-xl font-bold leading-snug tracking-tight text-slate-900 dark:text-slate-100">
+                {negocio.nomeCliente}
               </h2>
             </div>
             <button
@@ -231,29 +220,29 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center justify-start gap-2">
+              {negocio.clientePublicId && (
+                <a
+                  href={getWebApoliceClienteUrl(negocio.clientePublicId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-600 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-900 dark:text-indigo-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/40"
+                >
+                  <span>Ver Cadastro</span>
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                </a>
+              )}
+
               {negocio.telefonePrincipal && negocio.telefonePrincipal.trim() && (
                 <a
                   href={getWhatsAppLink(negocio.telefonePrincipal)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-[#20bd5a]"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-[#20bd5a]"
                 >
                   <MessageCircle className="h-3.5 w-3.5 fill-white/20" />
                   <span>WhatsApp</span>
                 </a>
               )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('atividades');
-                  setShowAddActivityForm(true);
-                }}
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#5A52FF] px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-indigo-700"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Atividade</span>
-              </button>
             </div>
           </div>
 
