@@ -8,6 +8,7 @@ export interface UsuarioBasicoDto {
   isActive?: boolean;
   acessoTotal?: boolean;
   podeUsarAssertiva?: boolean;
+  podeUsarDiscadorVoip?: boolean;
   permissoes?: string[];
 }
 

@@ -68,7 +68,8 @@ public class UsersController : ControllerBase
             isActive     = acesso.Ativo,
             acessoTotal  = acesso.AcessoTotal,
             permissoes   = acesso.TemPermissaoCrm ? new[] { "crm.acessar" } : Array.Empty<string>(),
-            podeUsarAssertiva = acesso.PodeUsarAssertiva
+            podeUsarAssertiva = acesso.PodeUsarAssertiva,
+            podeUsarDiscadorVoip = acesso.PodeUsarDiscadorVoip
         });
     }
 }

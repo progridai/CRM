@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2, ChevronRight, UserRound, ExternalLink } from 'lucide-react';
 import { getWebApoliceClienteUrl } from '../../config/webApolice';
 import { listarImportacoesNegocio, type NegocioDto, type EtapaDto, type NegocioImportacaoDto } from '../../services/negociosService';
@@ -9,6 +9,7 @@ import { getNameInitial } from '../../utils';
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
 import { useAuth } from '../../auth/AuthProvider';
 import { AssertivaFicha } from '../Assertiva/AssertivaFicha';
+import { DiscadorVoipChamada } from './DiscadorVoipChamada';
 
 interface NegocioDetalhesDrawerProps {
   negocio: NegocioDto | null;
@@ -81,24 +82,11 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   const { user } = useAuth();
   const clienteId = negocio?.clientePublicId;
   const exibirAssertiva = !!clienteId && user?.podeUsarAssertiva === true;
+  const exibirDiscador = user?.podeUsarDiscadorVoip === true;
   const [aba, setActiveTab] = useState<AbaFicha>('geral');
   const activeTab = aba === 'assertiva' && !exibirAssertiva ? 'geral' : aba;
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
-  const [avisoVoip, setAvisoVoip] = useState<string | null>(null);
-  const avisoVoipTimer = useRef<number | null>(null);
-
-  const mostrarAvisoVoip = () => {
-    setAvisoVoip('A integração VoIP está em configuração.');
-    if (avisoVoipTimer.current) window.clearTimeout(avisoVoipTimer.current);
-    avisoVoipTimer.current = window.setTimeout(() => {
-      setAvisoVoip(null);
-      avisoVoipTimer.current = null;
-    }, 3500);
-  };
-
-  useEffect(() => () => {
-    if (avisoVoipTimer.current) window.clearTimeout(avisoVoipTimer.current);
-  }, []);
+  const [discadorAberto, setDiscadorAberto] = useState(false);
 
   const [atividades, setAtividades] = useState<any[]>([]);
   const [loadingAtividades, setLoadingAtividades] = useState(false);
@@ -260,21 +248,26 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
                   </a>
                 )}
 
-                <button
-                  type="button"
-                  onClick={mostrarAvisoVoip}
-                  className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#5A52FF] px-3 text-xs font-bold text-white shadow-xs transition-colors hover:bg-indigo-700"
-                >
-                  <Phone className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Discador VoIP</span>
-                </button>
+                {exibirDiscador && (
+                  <button
+                    type="button"
+                    aria-expanded={discadorAberto}
+                    onClick={() => setDiscadorAberto((aberto) => !aberto)}
+                    className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#5A52FF] px-3 text-xs font-bold text-white shadow-xs transition-colors hover:bg-indigo-700"
+                  >
+                    <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Discador VoIP</span>
+                  </button>
+                )}
               </div>
 
-              {avisoVoip && (
-                <p role="status" className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
-                  <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {avisoVoip}
-                </p>
+              {exibirDiscador && discadorAberto && (
+                <DiscadorVoipChamada
+                  key={negocio.publicId}
+                  negocio={negocio}
+                  usuarioId={user?.id}
+                  onFechar={() => setDiscadorAberto(false)}
+                />
               )}
             </div>
           </div>
