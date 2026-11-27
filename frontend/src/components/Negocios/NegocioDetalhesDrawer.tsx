@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Phone, FileText, MessageCircle, Plus, MessageSquare, Loader2, CreditCard, Trash2, ChevronRight, UserRound, ExternalLink } from 'lucide-react';
 import { getWebApoliceClienteUrl } from '../../config/webApolice';
 import { listarImportacoesNegocio, type NegocioDto, type EtapaDto, type NegocioImportacaoDto } from '../../services/negociosService';
@@ -84,6 +84,21 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   const [aba, setActiveTab] = useState<AbaFicha>('geral');
   const activeTab = aba === 'assertiva' && !exibirAssertiva ? 'geral' : aba;
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
+  const [avisoVoip, setAvisoVoip] = useState<string | null>(null);
+  const avisoVoipTimer = useRef<number | null>(null);
+
+  const mostrarAvisoVoip = () => {
+    setAvisoVoip('A integração VoIP está em configuração.');
+    if (avisoVoipTimer.current) window.clearTimeout(avisoVoipTimer.current);
+    avisoVoipTimer.current = window.setTimeout(() => {
+      setAvisoVoip(null);
+      avisoVoipTimer.current = null;
+    }, 3500);
+  };
+
+  useEffect(() => () => {
+    if (avisoVoipTimer.current) window.clearTimeout(avisoVoipTimer.current);
+  }, []);
 
   const [atividades, setAtividades] = useState<any[]>([]);
   const [loadingAtividades, setLoadingAtividades] = useState(false);
@@ -219,29 +234,47 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-2">
-              {negocio.clientePublicId && (
-                <a
-                  href={getWebApoliceClienteUrl(negocio.clientePublicId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-600 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-900 dark:text-indigo-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/40"
-                >
-                  <span>Ver Cadastro</span>
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </a>
-              )}
+            <div className="flex w-full flex-col items-start gap-2">
+              <div aria-label="Ações do cliente" className="flex flex-wrap items-center justify-start gap-2">
+                {negocio.clientePublicId && (
+                  <a
+                    href={getWebApoliceClienteUrl(negocio.clientePublicId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-indigo-600 shadow-xs transition-colors hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-900 dark:text-indigo-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/40"
+                  >
+                    <span>Ver Cadastro</span>
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  </a>
+                )}
 
-              {negocio.telefonePrincipal && negocio.telefonePrincipal.trim() && (
-                <a
-                  href={getWhatsAppLink(negocio.telefonePrincipal)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-[#20bd5a]"
+                {negocio.telefonePrincipal && negocio.telefonePrincipal.trim() && (
+                  <a
+                    href={getWhatsAppLink(negocio.telefonePrincipal)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#25D366] px-3 text-xs font-bold text-white shadow-xs transition-all hover:bg-[#20bd5a]"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5 fill-white/20" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={mostrarAvisoVoip}
+                  className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#5A52FF] px-3 text-xs font-bold text-white shadow-xs transition-colors hover:bg-indigo-700"
                 >
-                  <MessageCircle className="h-3.5 w-3.5 fill-white/20" />
-                  <span>WhatsApp</span>
-                </a>
+                  <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Discador VoIP</span>
+                </button>
+              </div>
+
+              {avisoVoip && (
+                <p role="status" className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+                  <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {avisoVoip}
+                </p>
               )}
             </div>
           </div>
