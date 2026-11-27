@@ -63,12 +63,7 @@ public sealed partial class ContatoTelefoneComando
             // A tabela compartilhada não possui sequence/default para o ID. O lock só é
             // necessário ao incluir novos registros e torna MAX(id)+1 seguro entre sistemas.
             if (telefones.Any(t => t.Id is null))
-            {
-                await connection.ExecuteAsync(new CommandDefinition(
-                    "LOCK TABLE core.pessoa_contato IN SHARE ROW EXCLUSIVE MODE;",
-                    transaction: transaction,
-                    cancellationToken: ct));
-            }
+                await BloquearInclusoesAsync(connection, transaction, ct);
 
             var existentes = (await connection.QueryAsync<TelefoneExistente>(new CommandDefinition(
                 """
@@ -145,49 +140,10 @@ public sealed partial class ContatoTelefoneComando
 
             var proximoId = 0L;
             if (telefones.Any(t => t.Id is null))
-            {
-                proximoId = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-                    "SELECT COALESCE(MAX(id), 0) + 1 FROM core.pessoa_contato;",
-                    transaction: transaction,
-                    cancellationToken: ct));
-            }
+                proximoId = await ProximoIdAsync(connection, transaction, ct);
 
             foreach (var telefone in telefones.Where(t => t.Id is null))
-            {
-                await connection.ExecuteAsync(new CommandDefinition(
-                    """
-                    INSERT INTO core.pessoa_contato (
-                        id,
-                        pessoa_id,
-                        tipo_contato,
-                        valor,
-                        valor_normalizado,
-                        principal,
-                        ativo,
-                        created_at
-                    ) VALUES (
-                        @id,
-                        @pessoaId,
-                        @tipo,
-                        @valor,
-                        @valorNormalizado,
-                        @principal,
-                        true,
-                        now()
-                    );
-                    """,
-                    new
-                    {
-                        id = proximoId++,
-                        pessoaId,
-                        telefone.Tipo,
-                        telefone.Valor,
-                        telefone.ValorNormalizado,
-                        telefone.Principal
-                    },
-                    transaction,
-                    cancellationToken: ct));
-            }
+                await InserirAsync(connection, transaction, pessoaId, proximoId++, telefone, ct);
 
             await transaction.CommitAsync(ct);
             _logger.LogInformation(
@@ -202,6 +158,43 @@ public sealed partial class ContatoTelefoneComando
             throw;
         }
     }
+
+    internal async Task<long?> AdicionarAssertivaAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        long pessoaId, string numero, string tipo, CancellationToken ct)
+    {
+        await BloquearInclusoesAsync(connection, transaction, ct);
+        var existentes = (await connection.QueryAsync<string>(new CommandDefinition("""
+            SELECT COALESCE(NULLIF(valor_normalizado, ''), valor, '') FROM core.pessoa_contato
+            WHERE pessoa_id = @pessoaId AND ativo AND UPPER(tipo_contato) IN ('CELULAR', 'TELEFONE');
+            """, new { pessoaId }, transaction, cancellationToken: ct))).AsList();
+
+        if (existentes.Any(valor => Assertiva.AssertivaClient.NormalizarTelefone(valor) == numero))
+            return null;
+        if (existentes.Count >= 10)
+            throw new Assertiva.AssertivaFalha(422, "limite_telefones", "O cadastro já tem o máximo de 10 telefones ativos.");
+
+        var telefone = Normalizar([new TelefoneInput(null, tipo, numero, true)]).Single()
+            with { Principal = existentes.Count == 0 };
+        var id = await ProximoIdAsync(connection, transaction, ct);
+        await InserirAsync(connection, transaction, pessoaId, id, telefone, ct);
+        return id;
+    }
+
+    private static Task BloquearInclusoesAsync(NpgsqlConnection db, NpgsqlTransaction tx, CancellationToken ct) =>
+        db.ExecuteAsync(new CommandDefinition(
+            "LOCK TABLE core.pessoa_contato IN SHARE ROW EXCLUSIVE MODE;", transaction: tx, cancellationToken: ct));
+
+    private static Task<long> ProximoIdAsync(NpgsqlConnection db, NpgsqlTransaction tx, CancellationToken ct) =>
+        db.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT COALESCE(MAX(id), 0) + 1 FROM core.pessoa_contato;", transaction: tx, cancellationToken: ct));
+
+    private static Task InserirAsync(NpgsqlConnection db, NpgsqlTransaction tx, long pessoaId, long id,
+        TelefoneNormalizado telefone, CancellationToken ct) =>
+        db.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO core.pessoa_contato (id, pessoa_id, tipo_contato, valor, valor_normalizado, principal, ativo, created_at)
+            VALUES (@id, @pessoaId, @Tipo, @Valor, @ValorNormalizado, @Principal, true, now());
+            """, new { id, pessoaId, telefone.Tipo, telefone.Valor, telefone.ValorNormalizado, telefone.Principal },
+            tx, cancellationToken: ct));
 
     private static List<TelefoneNormalizado> Normalizar(IReadOnlyList<TelefoneInput> inputs)
     {

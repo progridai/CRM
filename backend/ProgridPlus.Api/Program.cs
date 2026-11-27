@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using ProgridPlus.Api.Assertiva;
 using ProgridPlus.Api.Auth;
 using ProgridPlus.Api.Contatos;
 using ProgridPlus.Api.Data;
@@ -67,6 +68,18 @@ builder.Services.AddScoped<ImportacaoOperacoesServico>();
 // Integração WhatsApp/Sisnetsul. A chave é lida somente da configuração do processo.
 builder.Services.AddHttpClient<SisnetsulWhatsAppClient>();
 builder.Services.AddScoped<WhatsAppServico>();
+builder.Services.AddSingleton<AssertivaSegredo>();
+builder.Services.AddSingleton<AssertivaClient>();
+builder.Services.AddScoped<AssertivaServico>();
+builder.Services.AddHostedService<AssertivaRetencao>();
+builder.Services.AddHttpClient(AssertivaClient.NomeHttpClient, client =>
+    {
+        client.BaseAddress = new Uri("https://api.assertivasolucoes.com.br/");
+        client.Timeout = TimeSpan.FromSeconds(20);
+        client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+    .RemoveAllLoggers();
 // Authentication via Keycloak JWT Bearer
 var authority = builder.Configuration.GetValue<string>("Authentication:Authority")
     ?? throw new InvalidOperationException("Missing Authentication:Authority");

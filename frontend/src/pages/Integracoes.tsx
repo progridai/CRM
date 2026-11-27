@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, KeyRound, Loader2, MessageCircle, PlugZap, Save, Server } from 'lucide-react';
+import { useAuth } from '../auth/AuthProvider';
+import { AssertivaConfiguracaoForm } from '../components/Assertiva/AssertivaConfiguracaoForm';
 import {
   atualizarConfiguracaoWhatsApp,
   obterConfiguracaoWhatsApp,
@@ -11,6 +13,36 @@ const getErrorMessage = (error: any) =>
   error?.response?.data?.message ?? 'Não foi possível carregar as configurações da integração.';
 
 export const IntegracoesPage: React.FC = () => {
+  const { user } = useAuth();
+  const [aba, setAba] = useState<'whatsapp' | 'assertiva'>('whatsapp');
+  const exibirAssertiva = user?.isAdmin && user.podeUsarAssertiva;
+  const assertivaAtiva = aba === 'assertiva' && exibirAssertiva;
+  const botoes = 'border-b-2 px-3 py-2 text-sm font-semibold';
+  const ativo = 'border-indigo-500 text-indigo-700 dark:text-indigo-300';
+  const inativo = 'border-transparent text-slate-500 dark:text-slate-400';
+
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-5">
+      <div className="flex items-start gap-3">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"><PlugZap className="h-5 w-5" /></span>
+        <div>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Integrações</h1>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Configurações técnicas disponíveis somente para administradores.</p>
+        </div>
+      </div>
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800" aria-label="Integrações">
+        <button type="button" aria-pressed={!assertivaAtiva} onClick={() => setAba('whatsapp')}
+          className={`${botoes} ${!assertivaAtiva ? ativo : inativo}`}>WhatsApp</button>
+        {exibirAssertiva && <button type="button" aria-pressed={aba === 'assertiva'} onClick={() => setAba('assertiva')}
+          className={`${botoes} ${aba === 'assertiva' ? ativo : inativo}`}>Assertiva</button>}
+      </div>
+      <div hidden={assertivaAtiva}><WhatsAppConfiguracaoForm /></div>
+      {assertivaAtiva && <AssertivaConfiguracaoForm />}
+    </div>
+  );
+};
+
+const WhatsAppConfiguracaoForm: React.FC = () => {
   const [config, setConfig] = useState<WhatsAppConfiguracaoDto | null>(null);
   const [form, setForm] = useState<AtualizarWhatsAppConfiguracaoPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,15 +104,7 @@ export const IntegracoesPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5">
-      <div className="flex items-start gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"><PlugZap className="h-5 w-5" /></span>
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Integrações</h1>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Configurações técnicas disponíveis somente para administradores.</p>
-        </div>
-      </div>
-
+    <div className="space-y-5">
       {error && <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
       {success && <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4 shrink-0" />{success}</div>}
 

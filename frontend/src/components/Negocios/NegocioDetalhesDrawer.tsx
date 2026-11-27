@@ -7,6 +7,8 @@ import { NegociosDoCliente } from './NegociosDoCliente';
 import { formatarPeriodo, getCompetenceValue } from './negociosIndicators';
 import { getNameInitial } from '../../utils';
 import { useWhatsAppLink } from '../../hooks/useWhatsAppLink';
+import { useAuth } from '../../auth/AuthProvider';
+import { AssertivaFicha } from '../Assertiva/AssertivaFicha';
 
 interface NegocioDetalhesDrawerProps {
   negocio: NegocioDto | null;
@@ -35,7 +37,11 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
   onAtividadeRegistrada
 }) => {
   const { getWhatsAppLink } = useWhatsAppLink();
-  const [activeTab, setActiveTab] = useState<'geral' | 'negocios' | 'atividades' | 'historico'>('geral');
+  const { user } = useAuth();
+  const clienteId = negocio?.clientePublicId;
+  const exibirAssertiva = !!clienteId && user?.podeUsarAssertiva === true;
+  const [aba, setActiveTab] = useState<'geral' | 'negocios' | 'atividades' | 'historico' | 'assertiva'>('geral');
+  const activeTab = aba === 'assertiva' && !exibirAssertiva ? 'geral' : aba;
   const [showAddActivityForm, setShowAddActivityForm] = useState(false);
 
   const [atividades, setAtividades] = useState<any[]>([]);
@@ -216,7 +222,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
           </div>
 
           {/* Tab Navigation */}
-          <div className="grid grid-cols-4 border-b border-slate-100 dark:border-slate-800 -mb-6 mt-2 pt-2">
+          <div className={`grid ${exibirAssertiva ? 'grid-cols-5 sm:grid-cols-[1fr_1fr_1.2fr_1.2fr_1fr] [&>button]:px-1' : 'grid-cols-4'} border-b border-slate-100 dark:border-slate-800 -mb-6 mt-2 pt-2`}>
             <button
               type="button"
               onClick={() => setActiveTab('geral')}
@@ -250,7 +256,7 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
               }`}
             >
               <span>Atividades</span>
-              <span className="min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <span className={`${exibirAssertiva ? 'hidden sm:inline' : ''} min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300`}>
                 {negocio.atividadesCount || 0}
               </span>
             </button>
@@ -264,16 +270,25 @@ export const NegocioDetalhesDrawer: React.FC<NegocioDetalhesDrawerProps> = ({
               }`}
             >
               <span>Histórico</span>
-              <span className="min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <span className={`${exibirAssertiva ? 'hidden sm:inline' : ''} min-w-5 rounded-full bg-slate-100 px-1.5 py-0.5 text-center text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300`}>
                 {historico.length}
               </span>
             </button>
+            {exibirAssertiva && (
+              <button type="button" aria-pressed={activeTab === 'assertiva'} onClick={() => setActiveTab('assertiva')}
+                className={`border-b-2 px-1 pb-2.5 text-xs font-semibold transition-colors ${activeTab === 'assertiva'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+                Assertiva
+              </button>
+            )}
           </div>
         </div>
 
         {/* Content */}
         {/* Drawer Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+          {activeTab === 'assertiva' && clienteId && <AssertivaFicha key={clienteId} clienteId={clienteId} />}
 
           {activeTab === 'negocios' && (
             <NegociosDoCliente key={`${negocio.publicId}|${mesCobrancaDaTela}`} negocioAtual={negocio}

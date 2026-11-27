@@ -7,6 +7,7 @@ export interface UsuarioBasicoDto {
   email: string;
   isActive?: boolean;
   acessoTotal?: boolean;
+  podeUsarAssertiva?: boolean;
   permissoes?: string[];
 }
 

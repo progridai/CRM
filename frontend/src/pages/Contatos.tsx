@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, User, Phone, FileText, Loader2, AlertCircle, RefreshCw, MessageCircle, ExternalLink, Pencil, Plus } from 'lucide-react';
+import { Search, User, Phone, FileText, Loader2, AlertCircle, RefreshCw, MessageCircle, ExternalLink, Pencil, Plus, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { listarContatos } from '../services/contatosService';
 import type { ContatoDto } from '../services/contatosService';
@@ -7,6 +7,8 @@ import { formatCurrency } from '../utils';
 import { GerenciarTelefonesModal } from '../components/Contatos/GerenciarTelefonesModal';
 import { getWebApoliceClienteUrl } from '../config/webApolice';
 import { useWhatsAppLink } from '../hooks/useWhatsAppLink';
+import { useAuth } from '../auth/AuthProvider';
+import { AssertivaFicha } from '../components/Assertiva/AssertivaFicha';
 
 // ─── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -64,6 +66,7 @@ const DEBOUNCE_MS    = 350;
 
 export const ContatosPage: React.FC = () => {
   const { getWhatsAppLink } = useWhatsAppLink();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const buscaInicial = searchParams.get('busca')?.trim() ?? '';
   const [busca, setBusca]           = useState(buscaInicial);
@@ -74,6 +77,15 @@ export const ContatosPage: React.FC = () => {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro]             = useState<string | null>(null);
   const [contatoEmEdicao, setContatoEmEdicao] = useState<ContatoDto | null>(null);
+  const [contatoAssertiva, setContatoAssertiva] = useState<ContatoDto | null>(null);
+  const dialogAssertiva = useRef<HTMLDialogElement>(null);
+  const mostrarAssertiva = user?.podeUsarAssertiva === true && contatoAssertiva !== null;
+
+  useEffect(() => {
+    const dialog = dialogAssertiva.current;
+    if (mostrarAssertiva && dialog && !dialog.open) dialog.showModal();
+    if (!mostrarAssertiva && dialog?.open) dialog.close();
+  }, [mostrarAssertiva]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -322,6 +334,13 @@ export const ContatosPage: React.FC = () => {
                           <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                         </a>
 
+                        {user?.podeUsarAssertiva && c.clientePublicId && (
+                          <button type="button" onClick={() => setContatoAssertiva(c)}
+                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:border-indigo-400 dark:border-slate-700 dark:text-indigo-300">
+                            Assertiva
+                          </button>
+                        )}
+
                         {/* WhatsApp habilitado somente quando existe telefone válido */}
                         {whatsappHabilitado ? (
                           <a
@@ -397,6 +416,21 @@ export const ContatosPage: React.FC = () => {
         onClose={() => setContatoEmEdicao(null)}
         onSaved={carregar}
       />
+      <dialog ref={dialogAssertiva} aria-labelledby="contato-assertiva-titulo" onClose={() => setContatoAssertiva(null)}
+        className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-slate-900/45 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        {mostrarAssertiva && (
+          <>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2 id="contato-assertiva-titulo" className="font-display text-lg font-bold">Assertiva · {formatNome(contatoAssertiva.nome)}</h2>
+              <button type="button" aria-label="Fechar Assertiva" onClick={() => dialogAssertiva.current?.close()} className="rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <AssertivaFicha key={contatoAssertiva.clientePublicId} clienteId={contatoAssertiva.clientePublicId}
+              onTelefoneAdicionado={() => void carregar()} />
+          </>
+        )}
+      </dialog>
     </div>
   );
 };

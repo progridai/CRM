@@ -10,6 +10,7 @@ export interface AuthUser {
   email: string;
   roles: string[];
   isAdmin: boolean;
+  podeUsarAssertiva: boolean;
 }
 
 export interface AuthContextValue {
@@ -34,6 +35,7 @@ function extractUser(kc: ReturnType<typeof getKeycloakInstance>): AuthUser | nul
     email: token['email'] ?? '',
     roles: realmRoles,
     isAdmin: false,
+    podeUsarAssertiva: false,
   };
 }
 
@@ -73,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 name: profile.nome || tokenUser.name,
                 email: profile.email || tokenUser.email,
                 isAdmin: profile.acessoTotal === true,
+                podeUsarAssertiva: profile.podeUsarAssertiva === true,
               });
             }
           } catch (profileError) {
@@ -105,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (refreshed) {
           const refreshedUser = extractUser(kc);
           setUser((current) => refreshedUser
-            ? { ...refreshedUser, isAdmin: current?.isAdmin ?? false }
+            ? { ...refreshedUser, isAdmin: current?.isAdmin ?? false, podeUsarAssertiva: current?.podeUsarAssertiva ?? false }
             : null);
           setTokenProvider(async () => kc.token);
         }
